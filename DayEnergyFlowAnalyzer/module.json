@@ -1,0 +1,15 @@
+{
+  "id": "{0B3A5C7E-3F28-4F2D-9E1C-2B7D8F9A1B23}",
+  "name": "DayEnergyFlowAnalyzer",
+  "type": 3,
+  "vendor": "eprotec",
+  "aliases": [
+    "Day Energy Flow Analyzer"
+  ],
+  "url": "",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "version": "1.5.0",
+  "prefix": "DEFA"
+}

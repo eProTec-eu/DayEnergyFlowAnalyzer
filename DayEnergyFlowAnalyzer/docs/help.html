@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day Energy Flow Analyzer – Hilfe</title>
+  <style>
+    body{font:15px/1.55 -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:28px;max-width:980px;margin:auto;color:#222}
+    h1{font-size:28px;margin-bottom:0.4em}
+    h2{margin-top:1.4em;font-size:22px}
+    code,pre{background:#f6f8fa;border:1px solid #ddd;border-radius:6px;padding:6px}
+    pre{padding:12px;overflow:auto}
+    table{border-collapse:collapse;width:100%;margin-top:1em}
+    td,th{border:1px solid #ddd;padding:6px}
+  </style>
+</head>
+<body>
+  <h1>Day Energy Flow Analyzer – HTML Hilfe</h1>
+  <p>Analyse von PV, Wärmepumpe, Batterie, Verbrauch & Netz – inkl. Backfill.</p>
+
+  <h2>Eingangsvariablen</h2>
+  <table>
+    <tr><th>Ident</th><th>Bedeutung</th></tr>
+    <tr><td>VarPV</td><td>PV‑Erzeugung (kWh oder Impulse)</td></tr>
+    <tr><td>VarLoad</td><td>Hausverbrauch</td></tr>
+    <tr><td>VarHP / VarHPHeat / VarHPDHW</td><td>WP‑Energie</td></tr>
+    <tr><td>VarImport</td><td>Netzbezug</td></tr>
+    <tr><td>VarExport</td><td>Netzeinspeisung (optional)</td></tr>
+    <tr><td>VarSOC</td><td>Batterie‑SOC in % (optional)</td></tr>
+  </table>
+
+  <h2>Ergebnisvariablen</h2>
+  <table>
+    <tr><th>Ident</th><th>Beschreibung</th></tr>
+    <tr><td>HP_kWh</td><td>WP‑Energie am Zieltag</td></tr>
+    <tr><td>PV_to_WP_total_kWh</td><td>PV‑Anteil an WP (direkt+Batterie)</td></tr>
+    <tr><td>Import_real_kWh</td><td>Netzbezug inkl. WP</td></tr>
+    <tr><td>Import_no_wp_kWh</td><td>Netzbezug ohne WP</td></tr>
+    <tr><td>WP_import_change_signed_kWh</td><td>Nettoeffekt der WP</td></tr>
+  </table>
+
+  <h2>Lizenz (MIT License)</h2>
+  <pre><code>MIT License
+
+Copyright (c) 2026 Matthias Fenske
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</code></pre>
+
+</body>
+</html>

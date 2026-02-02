@@ -1,0 +1,12 @@
+{
+  "id": "{9F8D1C0B-7A7C-4D49-9E2A-0E1F8D6B42A5}",
+  "author": "Matthias Fenske",
+  "name": "Day Energy Flow Analyzer",
+  "url": "",
+  "version": "1.5.0",
+  "build": 14,
+  "date": 20260202,
+  "compatibility": {
+    "version": "7.0"
+  }
+}
