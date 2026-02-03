@@ -533,7 +533,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             "Std_WW"       => $this->ReadPropertyInteger('Dash_DHWHours'),
         ];
 
-        // 2) Ungültige Variablen verwerfen
+        // 2) Ungültige Variablen (0/nicht vorhanden) herausfiltern
         $valid = [];
         foreach ($vars as $key => $vid) {
             if ($vid > 0 && @IPS_VariableExists($vid)) {
@@ -548,80 +548,136 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return;
         }
 
-        // 3) Aggregations-Metadaten (Zähler vs. Ereignis)
-        //    agg: 1=Zähler (Sum), 0=Ereignis (Avg/Count)
+        // 3) Aggregations-Metadaten: 1=Zähler/Summe, 0=Ereignis (Avg/Count)
         $meta = [
-            "WMZ_Heizen" => ["agg" => 1, "field" => "Sum",  "title" => "WMZ Heizen"],
-            "WMZ_WW"     => ["agg" => 1, "field" => "Sum",  "title" => "WMZ Warmwasser"],
-            "WP_Heizen"  => ["agg" => 1, "field" => "Sum",  "title" => "WP Heizen"],
-            "WP_WW"      => ["agg" => 1, "field" => "Sum",  "title" => "WP Warmwasser"],
-            "WP_Gesamt"  => ["agg" => 1, "field" => "Sum",  "title" => "WP Gesamt"],
-            "Netto"      => ["agg" => 1, "field" => "Sum",  "title" => "Netto-Effekt"],
-            "PV"         => ["agg" => 1, "field" => "Sum",  "title" => "PV"],
-            "Haus"       => ["agg" => 1, "field" => "Sum",  "title" => "Hausverbrauch"],
-            "Netz"       => ["agg" => 1, "field" => "Sum",  "title" => "Netzbezug"],
-
+            "WMZ_Heizen" => ["agg" => 1, "field" => "Sum",   "title" => "WMZ Heizen"],
+            "WMZ_WW"     => ["agg" => 1, "field" => "Sum",   "title" => "WMZ Warmwasser"],
+            "WP_Heizen"  => ["agg" => 1, "field" => "Sum",   "title" => "WP Heizen"],
+            "WP_WW"      => ["agg" => 1, "field" => "Sum",   "title" => "WP Warmwasser"],
+            "WP_Gesamt"  => ["agg" => 1, "field" => "Sum",   "title" => "WP Gesamt"],
+            "Netto"      => ["agg" => 1, "field" => "Sum",   "title" => "Netto-Effekt"],
+            "PV"         => ["agg" => 1, "field" => "Sum",   "title" => "PV"],
+            "Haus"       => ["agg" => 1, "field" => "Sum",   "title" => "Hausverbrauch"],
+            "Netz"       => ["agg" => 1, "field" => "Sum",   "title" => "Netzbezug"],
             // Ereignisse:
-            "COP_Total"  => ["agg" => 0, "field" => "Avg",  "title" => "COP Gesamt (Ø)"],
-            "COP_Heizen" => ["agg" => 0, "field" => "Avg",  "title" => "COP Heizen (Ø)"],
-            "COP_WW"     => ["agg" => 0, "field" => "Avg",  "title" => "COP Warmwasser (Ø)"],
-            "Std_Heizen" => ["agg" => 0, "field" => "Count","title" => "WP-Heizstunden (Count)"],
-            "Std_WW"     => ["agg" => 0, "field" => "Count","title" => "WP-WW-Stunden (Count)"],
+            "COP_Total"  => ["agg" => 0, "field" => "Avg",   "title" => "COP Gesamt (Ø)"],
+            "COP_Heizen" => ["agg" => 0, "field" => "Avg",   "title" => "COP Heizen (Ø)"],
+            "COP_WW"     => ["agg" => 0, "field" => "Avg",   "title" => "COP Warmwasser (Ø)"],
+            "Std_Heizen" => ["agg" => 0, "field" => "Count", "title" => "WP-Heizstunden (Count)"],
+            "Std_WW"     => ["agg" => 0, "field" => "Count", "title" => "WP-WW-Stunden (Count)"],
         ];
 
-        // Nur Meta für tatsächlich vorhandene Keys verwenden
+        // Nur Meta für vorhandene Keys übernehmen
         $metaUsed = [];
         foreach ($valid as $k => $_) {
             $metaUsed[$k] = $meta[$k] ?? ["agg" => 1, "field" => "Sum", "title" => $k];
         }
 
-        // 4) Jahresauswahl
+        // 4) Jahre wählen (aktuelles Jahr + zwei Vorjahre)
         $yearNow = (int)date("Y");
-        $years = [$yearNow, $yearNow - 1, $yearNow - 2];
+        $years   = [$yearNow, $yearNow - 1, $yearNow - 2];
 
-        // 5) Aggregationsfunktion (Monatswerte)
-        $aggMonth = function(int $varId, int $agg, string $field, int $y, int $m) use ($acID): float {
-            $start = strtotime(sprintf('%04d-%02d-01 00:00:00', $y, $m));
-            $end   = strtotime(sprintf('%04d-%02d-01 00:00:00 +1 month', $y, $m));
-            // Aggregationstyp am AC setzen/prüfen nicht nötig; wir lesen "on the fly".
-            $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
-            if (!is_array($rows) || count($rows) === 0) return 0.0;
-            $r0 = $rows[0];
-            // Feld sicher auslesen
-            if (!array_key_exists($field, $r0)) {
-                // Fallbacks für Ereignisse
-                if ($agg === 0) {
-                    if ($field === "Avg" && array_key_exists("Avg", $r0)) return (float)$r0["Avg"];
-                    if ($field === "Count" && array_key_exists("Count", $r0)) return (float)$r0["Count"];
-                    if (array_key_exists("Avg", $r0)) return (float)$r0["Avg"];
-                }
-                // Fallbacks für Zähler
-                if ($agg === 1 && array_key_exists("Sum", $r0)) return (float)$r0["Sum"];
+        // 5) Robuste Monatsaggregation mit Zukunfts-Schutz und 6→5-Param-Fallback
+        $aggMonth = function (int $varId, int $agg, string $field, int $y, int $m) use ($acID): float {
+            // Monat [y-m] → [monthStart, nextMonth)
+            $monthStart = strtotime(sprintf('%04d-%02d-01 00:00:00', $y, $m));
+            $nextMonth  = strtotime(sprintf('%04d-%02d-01 00:00:00 +1 month', $y, $m));
+            if ($monthStart === false || $nextMonth === false) {
+                $this->SendDebug("GenerateDiagrams/aggMonth", "Ungültiges Datum y=$y m=$m", 0);
                 return 0.0;
             }
-            $val = $r0[$field];
-            if (!is_numeric($val)) return 0.0;
-            return (float)$val;
+
+            $now   = time();
+            $start = $monthStart;
+            $end   = min($nextMonth, $now);
+
+            // kompletter Monat in der Zukunft → 0
+            if ($start >= $end) {
+                return 0.0;
+            }
+
+            if (!@IPS_VariableExists($varId)) {
+                $this->SendDebug("GenerateDiagrams/aggMonth", "Variable $varId existiert nicht", 0);
+                return 0.0;
+            }
+
+            // Optional: Loggingstatus prüfen
+            try {
+                $isLogged = @AC_GetLoggingStatus($acID, $varId);
+                if ($isLogged === false) {
+                    $this->SendDebug("GenerateDiagrams/aggMonth", "Var $varId nicht geloggt → 0", 0);
+                    return 0.0;
+                }
+            } catch (\Throwable $e) {
+                // ältere IPS-Versionen ohne AC_GetLoggingStatus → ignorieren
+            }
+
+            $preferredField = $field;
+            $backupFields   = ($agg === 1) ? ["Sum"] : ["Avg", "Count"];
+
+            // Kompatibel aufrufen: erst 6-Parameter, dann 5-Parameter
+            $rows = null;
+            try {
+                $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end, 0);
+            } catch (\ArgumentCountError $e) {
+                try {
+                    $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
+                } catch (\Throwable $e2) {
+                    $this->SendDebug("GenerateDiagrams/aggMonth", "AC_GetAggregatedValues(5) Exception: ".$e2->getMessage(), 0);
+                    return 0.0;
+                }
+            } catch (\Throwable $e) {
+                try {
+                    $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
+                } catch (\Throwable $e2) {
+                    $this->SendDebug("GenerateDiagrams/aggMonth", "AC_GetAggregatedValues Fallback Exception: ".$e2->getMessage(), 0);
+                    return 0.0;
+                }
+            }
+
+            if (!is_array($rows) || count($rows) === 0) {
+                return 0.0;
+            }
+
+            $r0 = $rows[0];
+
+            // Bevorzugtes Feld
+            if (array_key_exists($preferredField, $r0) && is_numeric($r0[$preferredField])) {
+                return (float)$r0[$preferredField];
+            }
+            // Fallback-Felder
+            foreach ($backupFields as $bf) {
+                if (array_key_exists($bf, $r0) && is_numeric($r0[$bf])) {
+                    return (float)$r0[$bf];
+                }
+            }
+            return 0.0;
         };
 
-        // 6) Datenmatrix: pro Key → pro Jahr → 12 Monatswerte
-        $data = [];     // z.B. $data["PV"]["2026"] = [12 Werte]
-        $titles = [];   // Plot-Titel pro Key
+        // 6) Datenmatrix pro Key/Jahr/Monat aufbauen
+        $data   = [];   // $data["PV"]["2026"] = [12 Monatswerte]
+        $titles = [];   // Achsentitel/Plot-Titel pro Key
         foreach ($valid as $key => $vid) {
-            $cfg = $metaUsed[$key];
-            $agg = (int)$cfg["agg"];
-            $field = (string)$cfg["field"];
-            $titles[$key] = (string)$cfg["title"];
+            $cfg           = $metaUsed[$key];
+            $agg           = (int)$cfg["agg"];
+            $field         = (string)$cfg["field"];
+            $titles[$key]  = (string)$cfg["title"];
+
             foreach ($years as $y) {
                 $vals = [];
                 for ($m = 1; $m <= 12; $m++) {
+                    // Optional: zukünftige Monate des laufenden Jahres direkt 0
+                    if ($y === (int)date('Y') && $m > (int)date('n')) {
+                        $vals[] = 0.0;
+                        continue;
+                    }
                     $vals[] = round($aggMonth($vid, $agg, $field, $y, $m), 6);
                 }
                 $data[$key][(string)$y] = $vals;
             }
         }
 
-        // Prüfen, ob wenigstens irgendwo Daten != 0 existieren
+        // Prüfen, ob irgendwo Daten > 0 existieren
         $hasData = false;
         foreach ($data as $perYear) {
             foreach ($perYear as $series) {
@@ -634,64 +690,61 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return;
         }
 
-        // 7) Pfade & Ausgabeverzeichnis
-        $kernelDir = IPS_GetKernelDir();                           // /var/lib/symcon/
-        $baseDir   = $kernelDir . 'user/';                         // .../user/
-        $tempDir   = $baseDir . 'temp/';                           // .../user/temp/
+        // 7) Verzeichnisse vorbereiten
+        $kernelDir = IPS_GetKernelDir();             // z. B. /var/lib/symcon/
+        $baseDir   = $kernelDir . 'user/';           // .../user/
+        $tempDir   = $baseDir . 'temp/';             // .../user/temp/
         if (!is_dir($tempDir)) { @mkdir($tempDir, 0777, true); }
 
-        // 8) Python-Code generieren (nur Plotten!), Daten/Titel als JSON übergeben
+        // 8) Daten an Python (nur Plotten)
         $dataJson   = json_encode($data,   JSON_UNESCAPED_SLASHES);
         $titlesJson = json_encode($titles, JSON_UNESCAPED_SLASHES);
         $yearsJson  = json_encode($years,  JSON_UNESCAPED_SLASHES);
 
         $py = <<<PY
-        # -*- coding: utf-8 -*-
-        import json, os, sys
-        # Matplotlib ohne X-Server
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
+    # -*- coding: utf-8 -*-
+    import json, os, sys
+    import matplotlib
+    matplotlib.use('Agg')  # Headless
+    import matplotlib.pyplot as plt
 
-        data   = json.loads(r'''$dataJson''')
-        titles = json.loads(r'''$titlesJson''')
-        years  = json.loads(r'''$yearsJson''')
+    data   = json.loads(r'''$dataJson''')
+    titles = json.loads(r'''$titlesJson''')
+    years  = json.loads(r'''$yearsJson''')
 
-        base = r"$tempDir"
-        if not os.path.exists(base):
-            os.makedirs(base)
+    base = r"$tempDir"
+    if not os.path.exists(base):
+        os.makedirs(base)
 
-        files = []
-        for key, perYear in data.items():
-            plt.figure(figsize=(8, 4))
-            months = list(range(1, 13))
-            # Jede Jahresreihe plotten
-            for y in years:
-                ys = str(y)
-                vals = perYear.get(ys, [0]*12)
-                plt.plot(months, vals, label=ys, marker='o')
-            plt.title(titles.get(key, key))
-            plt.xlabel("Monat")
-            plt.ylabel("Wert")
-            plt.grid(True, alpha=0.3)
-            plt.xticks(months)
-            plt.legend()
-            fname = f"diagram_{key}.png"
-            fpath = os.path.join(base, fname)
-            try:
-                plt.savefig(fpath, bbox_inches='tight')
-                files.append(fname)
-            except Exception as e:
-                # einen Key auslassen, restliche weiter plotten
-                pass
-            finally:
-                plt.close()
+    files = []
+    for key, perYear in data.items():
+        plt.figure(figsize=(8, 4))
+        months = list(range(1, 13))
+        # Jede Jahresserie plotten
+        for y in years:
+            ys = str(y)
+            vals = perYear.get(ys, [0]*12)
+            plt.plot(months, vals, label=ys, marker='o')
+        plt.title(titles.get(key, key))
+        plt.xlabel("Monat")
+        plt.ylabel("Wert")
+        plt.grid(True, alpha=0.3)
+        plt.xticks(months)
+        plt.legend()
+        fname = f"diagram_{key}.png"
+        fpath = os.path.join(base, fname)
+        try:
+            plt.savefig(fpath, bbox_inches='tight')
+            files.append(fname)
+        except Exception:
+            pass
+        finally:
+            plt.close()
 
-        # Ergebnis: Dateiliste kommasepariert
-        sys.stdout.write(",".join(files))
-        PY;
+    sys.stdout.write(",".join(files))
+    PY;
 
-        // 9) Python ausführbar ermitteln
+        // 9) Python finden
         $pythonCmd = trim((string)@shell_exec('command -v python3 2>/dev/null'));
         if ($pythonCmd === '') {
             $pythonCmd = trim((string)@shell_exec('command -v python 2>/dev/null'));
@@ -705,11 +758,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
         // 10) Python temporär schreiben & ausführen
         $pyFile = $tempDir . 'defa_plot_' . time() . '_' . mt_rand(1000,9999) . '.py';
         file_put_contents($pyFile, $py);
-        $cmd = escapeshellcmd($pythonCmd) . ' ' . escapeshellarg($pyFile) . ' 2>&1';
+        $cmd    = escapeshellcmd($pythonCmd) . ' ' . escapeshellarg($pyFile) . ' 2>&1';
         $result = shell_exec($cmd);
         @unlink($pyFile);
 
-        // 11) Ergebnis robust prüfen
+        // 11) Ergebnis prüfen
         if (!is_string($result)) {
             $this->SendDebug("GenerateDiagrams", "Python-Ausgabe non-string: " . gettype($result), 0);
             echo "[]";
@@ -722,7 +775,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return;
         }
 
-        // 12) URLs bauen
+        // 12) URLs zurückgeben
         $files = array_filter(array_map('trim', explode(',', $result)));
         if (empty($files)) {
             $this->SendDebug("GenerateDiagrams", "Keine Dateien erzeugt", 0);
