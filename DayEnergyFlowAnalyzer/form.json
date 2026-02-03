@@ -303,7 +303,7 @@
       "type": "Button",
       "caption": "Hilfe im Browser (HTML)",
       "onClick": "DEFA_OpenHelp($id);",
-      "link": true
+      
     },
     {
       "type": "Button",
@@ -314,7 +314,7 @@
       "type": "Button",
       "caption": "Details als CSV exportieren",
       "onClick": "DEFA_ExportDetails($id);",
-      "link": true
+      
     }
   ]
 }
