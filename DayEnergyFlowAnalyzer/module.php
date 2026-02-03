@@ -446,6 +446,136 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->uiLog("Daily Backfill abgeschlossen: $written Punkte.");
     }
 
+    public function OpenDashboard()
+    {
+        $host = $this->getHost();
+        $url = "http://{$host}:3777/user/defa_dashboard.php";
+        echo $url;
+    }
+
+    public function ExportDashboardPDF()
+    {
+        $host = $this->getHost();
+        $url  = "http://{$host}:3777/user/defa_dashboard.php";
+
+        $html = @file_get_contents($url);
+        if (!$html) {
+            echo "about:blank";
+            return;
+        }
+
+        $pdfFile = IPS_GetKernelDir() . "user/temp/dashboard_" . time() . ".pdf";
+
+        $python = <<<PY
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+        import textwrap
+
+        html = r\"\"\"$html\"\"\"
+        c = canvas.Canvas("$pdfFile", pagesize=A4)
+        w, h = A4
+
+        y = h - 40
+        for line in textwrap.wrap(html, 120):
+            if y < 40:
+                c.showPage()
+                y = h - 40
+            c.drawString(40, y, line)
+            y -= 14
+        c.save()
+        PY;
+
+        IPS_RunScriptText($python);
+
+        echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+    }
+
+    public function GenerateDiagrams()
+    {
+        $acID = $this->ReadPropertyInteger('ArchiveControlID');
+        if ($acID <= 0) {
+            echo "[]";
+            return;
+        }
+
+        $vars = [
+            "WMZ_Heizen"      => $this->ReadPropertyInteger('Dash_HeatWMZ'),
+            "WMZ_WW"          => $this->ReadPropertyInteger('Dash_DHW_WMZ'),
+            "WP_Heizen"       => $this->ReadPropertyInteger('Dash_HeatPower'),
+            "WP_WW"           => $this->ReadPropertyInteger('Dash_DHW_Power'),
+            "WP_Gesamt"       => $this->ReadPropertyInteger('Dash_TotalPower'),
+            "Netto"           => $this->ReadPropertyInteger('Dash_NettoEffect'),
+            "COP_Total"       => $this->ReadPropertyInteger('Dash_COP_Total'),
+            "COP_Heizen"      => $this->ReadPropertyInteger('Dash_COP_Heat'),
+            "COP_WW"          => $this->ReadPropertyInteger('Dash_COP_DHW'),
+            "PV"              => $this->ReadPropertyInteger('Dash_PV'),
+            "Haus"            => $this->ReadPropertyInteger('Dash_Consumption'),
+            "Netz"            => $this->ReadPropertyInteger('Dash_GridBuy'),
+            "Std_Heizen"      => $this->ReadPropertyInteger('Dash_HeaterHours'),
+            "Std_WW"          => $this->ReadPropertyInteger('Dash_DHWHours')
+        ];
+
+        $json = json_encode($vars);
+        $year = date("Y");
+
+        $py = <<<PY
+        import json, matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import os
+
+        vars = json.loads(r'''$json''')
+        base = "/var/lib/symcon/user/temp/"
+        if not os.path.exists(base):
+            os.makedirs(base)
+
+        def plot(key, title):
+            import subprocess, json
+            def month(var, y, m):
+                php = f"<?php echo json_encode(AC_GetAggregatedValues($acID, {var}, 1, strtotime('{y}-{m}-01'), strtotime('{y}-{m}-01 +1 month'))); ?>"
+                out = subprocess.check_output(["php", "-r", php]).decode()
+                try:
+                    v = json.loads(out)[0].get("Sum", 0)
+                    return v
+                except:
+                    return 0
+
+            data = {str(y): [month(vars[key], y, m) for m in range(1, 13)] for y in [$year, $year-1, $year-2]}
+
+            plt.figure(figsize=(8,4))
+            for y, vals in data.items():
+                plt.plot(range(1,13), vals, label=y)
+
+            plt.title(title)
+            plt.grid(True)
+            plt.legend()
+            f = f"diagram_{key}.png"
+            plt.savefig(base + f, bbox_inches='tight')
+            plt.close()
+            return f
+
+        files = [plot(k, k) for k in vars]
+        print(",".join(files))
+        PY;
+
+        $result = IPS_RunScriptText($py);
+        $files  = explode(",", trim($result));
+
+        $host = $this->getHost();
+        echo json_encode(array_map(fn($f) => "http://{$host}:3777/user/temp/".$f, $files));
+    }
+
+    private function getHost()
+    {
+        $ifaces = Sys_GetNetworkInfo();
+        foreach ($ifaces as $i) {
+            if (!empty($i['IP']) && $i['IP'] !== '127.0.0.1') {
+                return $i['IP'];
+            }
+        }
+        return "127.0.0.1";
+    }
+
     // ==== Datenzugriff ====
     private function readHistory(int $acID, int $varID, \DateTimeImmutable $from, \DateTimeImmutable $to, bool $isCounter): array
     {

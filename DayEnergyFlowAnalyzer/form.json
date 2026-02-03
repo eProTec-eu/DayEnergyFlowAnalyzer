@@ -32,20 +32,16 @@
         {
           "type": "RowLayout",
           "items": [
-            { "type": "SelectVariable", "name": "VarHeatEnergy",       "caption": "Wärmemenge Heizen [kWh / Zähler]" },
+            { "type": "SelectVariable", "name": "VarHeatEnergy", "caption": "Wärmemenge Heizen [kWh / Zähler]" },
             { "type": "CheckBox",       "name": "HeatEnergyIsCounter", "caption": "Heiz-Wärmemenge ist Zählerstand" }
           ]
         },
         {
           "type": "RowLayout",
           "items": [
-            { "type": "SelectVariable", "name": "VarDHWEnergy",        "caption": "Wärmemenge Warmwasser [kWh / Zähler]" },
+            { "type": "SelectVariable", "name": "VarDHWEnergy",  "caption": "Wärmemenge Warmwasser [kWh / Zähler]" },
             { "type": "CheckBox",       "name": "DHW_EnergyIsCounter", "caption": "WW-Wärmemenge ist Zählerstand" }
           ]
-        },
-        {
-          "type": "Label",
-          "caption": "Hinweis: Diese Werte werden zur COP-Berechnung genutzt (COP gesamt/Heizen/WW)."
         }
       ]
     },
@@ -130,59 +126,27 @@
 
     {
       "type": "ExpansionPanel",
-      "caption": "Analyse-Parameter (Komfort)",
+      "caption": "Dashboard Variablen",
       "items": [
-        {
-          "type": "NumberSpinner",
-          "name": "CapKWh",
-          "caption": "Batteriekapazität [kWh]",
-          "minimum": 0.1,
-          "maximum": 200,
-          "digits": 2,
-          "value": 10.0
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "EtaC",
-          "caption": "Ladewirkungsgrad ηc",
-          "minimum": 0.5,
-          "maximum": 1.0,
-          "digits": 2,
-          "value": 0.95
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "EtaD",
-          "caption": "Entladewirkungsgrad ηd",
-          "minimum": 0.5,
-          "maximum": 1.0,
-          "digits": 2,
-          "value": 0.95
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "ChargeKW",
-          "caption": "Max. Ladeleistung [kW]",
-          "minimum": 0.1,
-          "maximum": 50,
-          "digits": 2,
-          "value": 3.0
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "DischargeKW",
-          "caption": "Max. Entladeleistung [kW]",
-          "minimum": 0.1,
-          "maximum": 50,
-          "digits": 2,
-          "value": 3.0
-        },
-        {
-          "type": "CheckBox",
-          "name": "ReturnDetails",
-          "caption": "Intervall-Details zurückgeben",
-          "value": true
-        }
+        { "type": "SelectVariable", "caption": "WMZ Heizen",      "name": "Dash_HeatWMZ" },
+        { "type": "SelectVariable", "caption": "WMZ Warmwasser",  "name": "Dash_DHW_WMZ" },
+
+        { "type": "SelectVariable", "caption": "WP Strom Heizen", "name": "Dash_HeatPower" },
+        { "type": "SelectVariable", "caption": "WP Strom WW",     "name": "Dash_DHW_Power" },
+        { "type": "SelectVariable", "caption": "WP Strom Gesamt", "name": "Dash_TotalPower" },
+
+        { "type": "SelectVariable", "caption": "Netto-Effekt", "name": "Dash_NettoEffect" },
+
+        { "type": "SelectVariable", "caption": "COP Gesamt", "name": "Dash_COP_Total" },
+        { "type": "SelectVariable", "caption": "COP Heizen", "name": "Dash_COP_Heat" },
+        { "type": "SelectVariable", "caption": "COP WW",     "name": "Dash_COP_DHW" },
+
+        { "type": "SelectVariable", "caption": "PV Erzeugung", "name": "Dash_PV" },
+        { "type": "SelectVariable", "caption": "Hausverbrauch", "name": "Dash_Consumption" },
+        { "type": "SelectVariable", "caption": "Netzbezug",     "name": "Dash_GridBuy" },
+
+        { "type": "SelectVariable", "caption": "Betriebsstunden Heizen",      "name": "Dash_HeaterHours" },
+        { "type": "SelectVariable", "caption": "Betriebsstunden Warmwasser",  "name": "Dash_DHWHours" }
       ]
     },
 
@@ -210,17 +174,6 @@
         { "type": "Button", "caption": "Backfill jetzt starten", "onClick": "DEFA_BackfillRange($id);" },
         { "type": "Label", "name": "BackfillLog", "caption": "" }
       ]
-    },
-
-    {
-      "type": "ExpansionPanel",
-      "caption": "Backfill – täglich automatisch",
-      "items": [
-        { "type": "CheckBox", "name": "DailyBackfillEnabled", "caption": "Täglichen Backfill (gestern) aktivieren" },
-        { "type": "ValidationTextBox", "name": "DailyStartTime", "caption": "Startzeit (HH:MM)", "value": "02:30" },
-        { "type": "Button", "caption": "Täglichen Backfill jetzt testen", "onClick": "DEFA_RunDailyBackfillNow($id);" },
-        { "type": "Label", "name": "DailyBackfillInfo", "caption": "Start möglichst spät setzen, da Analyse für 'gestern' Daten aus 'heute' benötigt." }
-      ]
     }
   ],
 
@@ -242,6 +195,23 @@
       "caption": "Hilfe im Browser (HTML)",
       "onClick": "echo DEFA_OpenHelp($id);",
       "link": true
+    },
+    {
+      "type": "Button",
+      "caption": "Dashboard anzeigen",
+      "onClick": "echo DEFA_OpenDashboard($id);",
+      "link": true
+    },
+    {
+      "type": "Button",
+      "caption": "Dashboard als PDF exportieren",
+      "onClick": "echo DEFA_ExportDashboardPDF($id);",
+      "link": true
+    },
+    {
+      "type": "Button",
+      "caption": "Diagramme generieren",
+      "onClick": "echo DEFA_GenerateDiagrams($id);"
     },
     {
       "type": "Button",
