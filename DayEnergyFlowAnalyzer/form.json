@@ -32,14 +32,14 @@
         {
           "type": "RowLayout",
           "items": [
-            { "type": "SelectVariable", "name": "VarHeatEnergy", "caption": "Wärmemenge Heizen [kWh / Zähler]" },
+            { "type": "SelectVariable", "name": "VarHeatEnergy",       "caption": "Wärmemenge Heizen [kWh / Zähler]" },
             { "type": "CheckBox",       "name": "HeatEnergyIsCounter", "caption": "Heiz-Wärmemenge ist Zählerstand" }
           ]
         },
         {
           "type": "RowLayout",
           "items": [
-            { "type": "SelectVariable", "name": "VarDHWEnergy",  "caption": "Wärmemenge Warmwasser [kWh / Zähler]" },
+            { "type": "SelectVariable", "name": "VarDHWEnergy",        "caption": "Wärmemenge Warmwasser [kWh / Zähler]" },
             { "type": "CheckBox",       "name": "DHW_EnergyIsCounter", "caption": "WW-Wärmemenge ist Zählerstand" }
           ]
         },
@@ -207,9 +207,21 @@
           ]
         },
         { "type": "Label", "caption": "Analysefenster automatisch: D–1 00:00 → D+1 00:00" },
-        { "type": "Button", "caption": "Backfill jetzt starten" ,"onClick": "DEFA_BackfillRange($id);" },
+        { "type": "Button", "caption": "Backfill jetzt starten", "onClick": "DEFA_BackfillRange($id);" },
         { "type": "Label", "name": "BackfillLog", "caption": "" }
-      ]}
+      ]
+    },
+
+    {
+      "type": "ExpansionPanel",
+      "caption": "Backfill – täglich automatisch",
+      "items": [
+        { "type": "CheckBox", "name": "DailyBackfillEnabled", "caption": "Täglichen Backfill (gestern) aktivieren" },
+        { "type": "ValidationTextBox", "name": "DailyStartTime", "caption": "Startzeit (HH:MM)", "value": "02:30" },
+        { "type": "Button", "caption": "Täglichen Backfill jetzt testen", "onClick": "DEFA_RunDailyBackfillNow($id);" },
+        { "type": "Label", "name": "DailyBackfillInfo", "caption": "Start möglichst spät setzen, da Analyse für 'gestern' Daten aus 'heute' benötigt." }
+      ]
+    }
   ],
 
   "actions": [
@@ -239,7 +251,8 @@
     {
       "type": "Button",
       "caption": "Details als CSV exportieren",
-        "onClick": "echo DEFA_ExportDetails($id);",
-        "link": true
+      "onClick": "echo DEFA_ExportDetails($id);",
+      "link": true
     }
-  ]}
+  ]
+}
