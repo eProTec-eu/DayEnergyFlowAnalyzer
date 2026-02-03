@@ -573,13 +573,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $metaUsed[$k] = $meta[$k] ?? ["agg" => 1, "field" => "Sum", "title" => $k];
         }
 
-        // 4) Jahre wählen (aktuelles Jahr + zwei Vorjahre)
+        // 4) Jahre (aktuelles Jahr + zwei Vorjahre)
         $yearNow = (int)date("Y");
         $years   = [$yearNow, $yearNow - 1, $yearNow - 2];
 
-        // 5) Robuste Monatsaggregation mit Zukunfts-Schutz und 6→5-Param-Fallback
+        // 5) Robuste Monatsaggregation (Zukunfts-Schutz, 6→5-Param-Fallback)
         $aggMonth = function (int $varId, int $agg, string $field, int $y, int $m) use ($acID): float {
-            // Monat [y-m] → [monthStart, nextMonth)
             $monthStart = strtotime(sprintf('%04d-%02d-01 00:00:00', $y, $m));
             $nextMonth  = strtotime(sprintf('%04d-%02d-01 00:00:00 +1 month', $y, $m));
             if ($monthStart === false || $nextMonth === false) {
@@ -590,10 +589,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $now   = time();
             $start = $monthStart;
             $end   = min($nextMonth, $now);
-
-            // kompletter Monat in der Zukunft → 0
             if ($start >= $end) {
-                return 0.0;
+                return 0.0; // kompletter Monat in der Zukunft
             }
 
             if (!@IPS_VariableExists($varId)) {
@@ -601,7 +598,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 return 0.0;
             }
 
-            // Optional: Loggingstatus prüfen
             try {
                 $isLogged = @AC_GetLoggingStatus($acID, $varId);
                 if ($isLogged === false) {
@@ -615,7 +611,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $preferredField = $field;
             $backupFields   = ($agg === 1) ? ["Sum"] : ["Avg", "Count"];
 
-            // Kompatibel aufrufen: erst 6-Parameter, dann 5-Parameter
             $rows = null;
             try {
                 $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end, 0);
@@ -640,12 +635,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
             }
 
             $r0 = $rows[0];
-
-            // Bevorzugtes Feld
             if (array_key_exists($preferredField, $r0) && is_numeric($r0[$preferredField])) {
                 return (float)$r0[$preferredField];
             }
-            // Fallback-Felder
             foreach ($backupFields as $bf) {
                 if (array_key_exists($bf, $r0) && is_numeric($r0[$bf])) {
                     return (float)$r0[$bf];
@@ -654,19 +646,19 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return 0.0;
         };
 
-        // 6) Datenmatrix pro Key/Jahr/Monat aufbauen
+        // 6) Datenmatrix aufbauen
         $data   = [];   // $data["PV"]["2026"] = [12 Monatswerte]
-        $titles = [];   // Achsentitel/Plot-Titel pro Key
+        $titles = [];
         foreach ($valid as $key => $vid) {
-            $cfg           = $metaUsed[$key];
-            $agg           = (int)$cfg["agg"];
-            $field         = (string)$cfg["field"];
-            $titles[$key]  = (string)$cfg["title"];
+            $cfg          = $metaUsed[$key];
+            $agg          = (int)$cfg["agg"];
+            $field        = (string)$cfg["field"];
+            $titles[$key] = (string)$cfg["title"];
 
             foreach ($years as $y) {
                 $vals = [];
                 for ($m = 1; $m <= 12; $m++) {
-                    // Optional: zukünftige Monate des laufenden Jahres direkt 0
+                    // zukünftige Monate des laufenden Jahres direkt 0
                     if ($y === (int)date('Y') && $m > (int)date('n')) {
                         $vals[] = 0.0;
                         continue;
@@ -696,87 +688,136 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $tempDir   = $baseDir . 'temp/';             // .../user/temp/
         if (!is_dir($tempDir)) { @mkdir($tempDir, 0777, true); }
 
-        // 8) Daten an Python (nur Plotten)
-        $dataJson   = json_encode($data,   JSON_UNESCAPED_SLASHES);
-        $titlesJson = json_encode($titles, JSON_UNESCAPED_SLASHES);
-        $yearsJson  = json_encode($years,  JSON_UNESCAPED_SLASHES);
+        // 8) SVG-Renderer (inline, keine externen Libs)
+        $makeSVG = function (string $key, string $title, array $perYear, string $filePath) {
+            $width = 820; $height = 340;
+            $marginL = 60; $marginR = 20; $marginT = 35; $marginB = 40;
+            $plotW = $width - $marginL - $marginR;
+            $plotH = $height - $marginT - $marginB;
+            $months = range(1, 12);
 
-        $py = <<<PY
-    # -*- coding: utf-8 -*-
-    import json, os, sys
-    import matplotlib
-    matplotlib.use('Agg')  # Headless
-    import matplotlib.pyplot as plt
+            // Max ermitteln
+            $maxV = 0.0;
+            foreach ($perYear as $vals) {
+                $mv = max($vals);
+                if ($mv > $maxV) $maxV = $mv;
+            }
+            if ($maxV <= 0) $maxV = 1.0;
 
-    data   = json.loads(r'''$dataJson''')
-    titles = json.loads(r'''$titlesJson''')
-    years  = json.loads(r'''$yearsJson''')
+            // "schöne" Obergrenze (optional runden)
+            $power10 = pow(10, floor(log10($maxV)));
+            $niceMax = ceil($maxV / $power10) * $power10;
+            if ($niceMax / $maxV > 4) { $niceMax = $maxV; } // nicht zu weit wegrunden
+            $yMax = $niceMax;
+            $yTicks = 5;
+            $yStep = $yMax / $yTicks;
 
-    base = r"$tempDir"
-    if not os.path.exists(base):
-        os.makedirs(base)
+            $colors = [
+                "#1f77b4", // blau
+                "#ff7f0e", // orange
+                "#2ca02c", // grün
+                "#d62728", // rot
+                "#9467bd", // lila
+            ];
 
-    files = []
-    for key, perYear in data.items():
-        plt.figure(figsize=(8, 4))
-        months = list(range(1, 13))
-        # Jede Jahresserie plotten
-        for y in years:
-            ys = str(y)
-            vals = perYear.get(ys, [0]*12)
-            plt.plot(months, vals, label=ys, marker='o')
-        plt.title(titles.get(key, key))
-        plt.xlabel("Monat")
-        plt.ylabel("Wert")
-        plt.grid(True, alpha=0.3)
-        plt.xticks(months)
-        plt.legend()
-        fname = f"diagram_{key}.png"
-        fpath = os.path.join(base, fname)
-        try:
-            plt.savefig(fpath, bbox_inches='tight')
-            files.append(fname)
-        except Exception:
-            pass
-        finally:
-            plt.close()
+            // Hilfsfunktionen
+            $sx = function($m) use ($months, $plotW, $marginL) {
+                $i = $m - 1;
+                $dx = (count($months) > 1) ? $plotW / (count($months) - 1) : 0;
+                return $marginL + $i * $dx;
+            };
+            $sy = function($v) use ($yMax, $plotH, $marginT) {
+                $v = max(0.0, min($yMax, $v));
+                $p = ($yMax > 0) ? ($v / $yMax) : 0;
+                return $marginT + $plotH * (1.0 - $p);
+            };
 
-    sys.stdout.write(",".join(files))
-    PY;
+            ob_start();
+            echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+            echo '<svg xmlns="http://www.w3.org/2000/svg" width="'.$width.'" height="'.$height.'" viewBox="0 0 '.$width.' '.$height.'">' . "\n";
+            echo '<rect x="0" y="0" width="'.$width.'" height="'.$height.'" fill="#ffffff"/>' . "\n";
 
-        // 9) Python finden
-        $pythonCmd = trim((string)@shell_exec('command -v python3 2>/dev/null'));
-        if ($pythonCmd === '') {
-            $pythonCmd = trim((string)@shell_exec('command -v python 2>/dev/null'));
+            // Titel
+            echo '<text x="'.($width/2).'" y="'.($marginT-12).'" text-anchor="middle" font-size="16" font-family="sans-serif">'.htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</text>'."\n";
+
+            // Achsen
+            $x0 = $marginL; $y0 = $marginT + $plotH; $x1 = $marginL + $plotW; $y1 = $marginT;
+            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x1.'" y2="'.$y0.'" stroke="#333" stroke-width="1"/>'."\n"; // x-Achse
+            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x0.'" y2="'.$y1.'" stroke="#333" stroke-width="1"/>'."\n"; // y-Achse
+
+            // Gitter + y-Ticks
+            for ($i = 0; $i <= $yTicks; $i++) {
+                $yv = $i * $yStep;
+                $yy = $sy($yv);
+                $label = rtrim(rtrim(number_format($yv, 2, ',', ''), '0'), ',');
+                echo '<line x1="'.$x0.'" y1="'.$yy.'" x2="'.$x1.'" y2="'.$yy.'" stroke="#ddd" stroke-width="1"/>'."\n";
+                echo '<text x="'.($x0-8).'" y="'.($yy+4).'" text-anchor="end" font-size="12" font-family="sans-serif">'.$label.'</text>'."\n";
+            }
+
+            // x-Ticks (Monate)
+            foreach ($months as $m) {
+                $xx = $sx($m);
+                echo '<line x1="'.$xx.'" y1="'.($y0).'" x2="'.$xx.'" y2="'.($y0+4).'" stroke="#333" stroke-width="1"/>'."\n";
+                echo '<text x="'.$xx.'" y="'.($y0+18).'" text-anchor="middle" font-size="12" font-family="sans-serif">'.$m.'</text>'."\n";
+            }
+            // Achsenbeschriftungen
+            echo '<text x="'.($width/2).'" y="'.($height-8).'" text-anchor="middle" font-size="12" font-family="sans-serif">Monat</text>'."\n";
+            echo '<text x="14" y="'.($marginT + $plotH/2).'" text-anchor="middle" font-size="12" font-family="sans-serif" transform="rotate(-90 14,'.($marginT + $plotH/2).')">Wert</text>'."\n";
+
+            // Linien je Jahr
+            $yearKeys = array_keys($perYear); // z.B. ["2026","2025","2024"]
+            $colorIdx = 0;
+            foreach ($yearKeys as $yk) {
+                $vals = $perYear[$yk];
+                $col  = $colors[$colorIdx % count($colors)];
+                $colorIdx++;
+
+                // Pfad
+                $d = '';
+                for ($i = 0; $i < count($vals); $i++) {
+                    $x = $sx($i+1);
+                    $y = $sy($vals[$i]);
+                    $d .= ($i === 0 ? 'M' : ' L') . $x . ' ' . $y;
+                }
+                echo '<path d="'.$d.'" fill="none" stroke="'.$col.'" stroke-width="2"/>'."\n";
+
+                // Punkte
+                for ($i = 0; $i < count($vals); $i++) {
+                    $x = $sx($i+1);
+                    $y = $sy($vals[$i]);
+                    echo '<circle cx="'.$x.'" cy="'.$y.'" r="3" fill="'.$col.'" />'."\n";
+                }
+
+                // Legende
+                $lx = $marginL + 10 + 120 * (($colorIdx-1) % 5);
+                $ly = $marginT - 18;
+                echo '<rect x="'.($lx-18).'" y="'.($ly-10).'" width="12" height="12" fill="'.$col.'"/>';
+                echo '<text x="'.$lx.'" y="'.$ly.'" font-size="12" font-family="sans-serif">'.htmlspecialchars($yk, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</text>'."\n";
+            }
+
+            echo '</svg>';
+            $svg = ob_get_clean();
+
+            @file_put_contents($filePath, $svg);
+            return file_exists($filePath);
+        };
+
+        // 9) Dateien erzeugen (SVG pro Kennzahl) und URLs zurückgeben
+        $files = [];
+        foreach ($data as $key => $perYear) {
+            $title = $titles[$key] ?? $key;
+            $fname = "diagram_{$key}.svg";
+            $fpath = $tempDir . $fname;
+
+            // SVG generieren
+            $ok = $makeSVG($key, $title, $perYear, $fpath);
+            if ($ok) {
+                $files[] = $fname;
+            } else {
+                $this->SendDebug("GenerateDiagrams", "SVG-Erzeugung fehlgeschlagen für $key", 0);
+            }
         }
-        if ($pythonCmd === '') {
-            $this->SendDebug("GenerateDiagrams", "Python nicht gefunden (python3/python).", 0);
-            echo "[]";
-            return;
-        }
 
-        // 10) Python temporär schreiben & ausführen
-        $pyFile = $tempDir . 'defa_plot_' . time() . '_' . mt_rand(1000,9999) . '.py';
-        file_put_contents($pyFile, $py);
-        $cmd    = escapeshellcmd($pythonCmd) . ' ' . escapeshellarg($pyFile) . ' 2>&1';
-        $result = shell_exec($cmd);
-        @unlink($pyFile);
-
-        // 11) Ergebnis prüfen
-        if (!is_string($result)) {
-            $this->SendDebug("GenerateDiagrams", "Python-Ausgabe non-string: " . gettype($result), 0);
-            echo "[]";
-            return;
-        }
-        $result = trim($result);
-        if ($result === '' || $result === 'true') {
-            $this->SendDebug("GenerateDiagrams", "Python-Ausgabe leer/true. CMD=$cmd", 0);
-            echo "[]";
-            return;
-        }
-
-        // 12) URLs zurückgeben
-        $files = array_filter(array_map('trim', explode(',', $result)));
         if (empty($files)) {
             $this->SendDebug("GenerateDiagrams", "Keine Dateien erzeugt", 0);
             echo "[]";
