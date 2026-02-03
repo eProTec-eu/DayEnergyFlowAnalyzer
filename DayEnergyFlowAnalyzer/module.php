@@ -1551,13 +1551,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13) { background:#fffefe; } /* Energie      */
             .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15) { background:#fafafa; } /* Betriebsstd. */
 
-            /* DURCHGEHEND: rechte Kante der 1. Spalte (Monat) */
-            .wp-jahresuebersicht thead tr:first-child th:first-child,
-            .wp-jahresuebersicht thead tr:last-child  th:first-child,
-            .wp-jahresuebersicht tbody td:first-child,
-            .wp-jahresuebersicht tfoot td:first-child {
-            border-right: 2px solid #bdbdbd !important;
-            }
+
+            /* Nutzen wir gezielt für die senkrechte Linie rechts neben "Monat" */
+            .vsep-right { border-right: 2px solid #bdbdbd !important; }
 
         </style>
         </head>
@@ -1573,7 +1569,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         <table class="wp-jahresuebersicht">
             <thead>
             <tr>
-                <th scope="col">Monat</th>
+                <th class="vsep-right">Monat</th
                 <th scope="col" colspan="2">Wärme (kWh)</th>
                 <th scope="col" colspan="3">WP&nbsp;Strom (kWh)</th>
                 <th scope="col" colspan="3">COP</th>
@@ -1581,7 +1577,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <th scope="col" colspan="2">Betriebsstunden</th>
             </tr>
             <tr>
-                <th></th>
+                <th class="vsep-right"></th>
                 <th>Heizen</th><th>WW</th>
                 <th>Heizen</th><th>WW</th><th>Gesamt</th>
                 <th>Gesamt</th><th>Heizen</th><th>WW</th>
@@ -1618,7 +1614,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $monthName = monthNameDe($YEAR, $m);
         ?>
             <tr>
-                <th scope="row"><?=htmlspecialchars($monthName, ENT_QUOTES, 'UTF-8')?></th>
+                <th scope="row" class="vsep-right">
+                    <?=htmlspecialchars($monthName, ENT_QUOTES, 'UTF-8')?>
+                </th>
                 <td class="num"><?=f1($wH)?></td>
                 <td class="num"><?=f1($wW)?></td>
                 <td class="num"><?=f1($eH)?></td>
@@ -1647,7 +1645,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $autHaus  = ($S['haus']>0)? max(0.0, min(1.0, 1.0 - ($S['netT']/$S['haus']))):0.0;
         ?>
             <tr>
-                <th scope="row">Gesamt</th>
+                <th scope="row" class="vsep-right">Gesamt</th>
                 <td class="num"><?=f1($S['wmzH'])?></td>
                 <td class="num"><?=f1($S['wmzW'])?></td>
                 <td class="num"><?=f1($S['wpH'])?></td>
