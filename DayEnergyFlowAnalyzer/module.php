@@ -260,7 +260,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return;
         }
 
-        // Hilfe laden
+        // Inhalt laden
         $html = file_get_contents($src);
 
         // Korrektes WebFront-Verzeichnis
@@ -272,27 +272,25 @@ class DayEnergyFlowAnalyzer extends IPSModule
             mkdir($tempDir, 0777, true);
         }
 
-        // Dateiname
+        // Datei erzeugen
         $filename = "defa_help_" . time() . ".html";
-        $targetFile = $targetDir . $filename;
+        $targetFile = $tempDir . $filename;
 
-        // Speichern
         file_put_contents($targetFile, $html);
 
-        // IP holen (erste aktive IP)
-        $ips = Sys_GetNetworkInfo();
+        // Lokale IP ermitteln
         $host = "127.0.0.1";
-        foreach ($ips as $i) {
-            if ($i["IP"] != "127.0.0.1" && $i["IP"] != "") {
-                $host = $i["IP"];
+        $net = Sys_GetNetworkInfo();
+        foreach ($net as $if) {
+            if (!empty($if["IP"]) && $if["IP"] !== "127.0.0.1") {
+                $host = $if["IP"];
                 break;
             }
         }
 
-        // URL bauen (Port 3777 ist immer Webserver)
+        // URL zum WebFront
         $url = "http://" . $host . ":3777/user/temp/" . $filename;
 
-        // Rückgabe an Browser
         echo $url;
     }
 
