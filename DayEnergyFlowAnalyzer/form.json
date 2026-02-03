@@ -5,85 +5,59 @@
       "name": "ArchiveControlID",
       "caption": "Archive Control (Archiv-Instanz)"
     },
-    {
-      "type": "SelectVariable",
-      "name": "VarPV",
-      "caption": "PV [kWh/Intervall oder Zähler]"
-    },
-    {
-      "type": "CheckBox",
-      "name": "PVIsCounter",
-      "caption": "PV ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarLoad",
-      "caption": "Last [kWh/Intervall oder Zähler]"
-    },
-    {
-      "type": "CheckBox",
-      "name": "LoadIsCounter",
-      "caption": "Last ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarHPHeat",
-      "caption": "WP Heizen [kWh/Intervall oder Zähler]"
-    },
-    {
-      "type": "CheckBox",
-      "name": "HPHeatIsCounter",
-      "caption": "WP Heizen ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarHPDHW",
-      "caption": "WP Warmwasser [kWh/Intervall oder Zähler]"
-    },
-    {
-      "type": "CheckBox",
-      "name": "HPDHWIsCounter",
-      "caption": "WP Warmwasser ist Zählerstand (kumuliert)"
-    },
+
+    { "type": "SelectVariable", "name": "VarPV",   "caption": "PV [kWh/Intervall oder Zähler]" },
+    { "type": "CheckBox",       "name": "PVIsCounter",   "caption": "PV ist Zählerstand (kumuliert)" },
+
+    { "type": "SelectVariable", "name": "VarLoad", "caption": "Last [kWh/Intervall oder Zähler]" },
+    { "type": "CheckBox",       "name": "LoadIsCounter", "caption": "Last ist Zählerstand (kumuliert)" },
+
+    { "type": "SelectVariable", "name": "VarHPHeat", "caption": "WP Heizen [kWh/Intervall oder Zähler]" },
+    { "type": "CheckBox",       "name": "HPHeatIsCounter", "caption": "WP Heizen ist Zählerstand (kumuliert)" },
+
+    { "type": "SelectVariable", "name": "VarHPDHW", "caption": "WP Warmwasser [kWh/Intervall oder Zähler]" },
+    { "type": "CheckBox",       "name": "HPDHWIsCounter", "caption": "WP Warmwasser ist Zählerstand (kumuliert)" },
+
     {
       "type": "Label",
       "caption": "Optional (falls es nur einen Gesamtzähler gibt):"
     },
+    { "type": "SelectVariable", "name": "VarHP", "caption": "WP Gesamt [kWh/Intervall oder Zähler] (optional)" },
+    { "type": "CheckBox",       "name": "HPIsCounter", "caption": "WP Gesamt ist Zählerstand (kumuliert)" },
+
     {
-      "type": "SelectVariable",
-      "name": "VarHP",
-      "caption": "WP Gesamt [kWh/Intervall oder Zähler] (optional)"
+      "type": "ExpansionPanel",
+      "caption": "Wärmemengenzähler (Ausgangsenergie)",
+      "items": [
+        {
+          "type": "RowLayout",
+          "items": [
+            { "type": "SelectVariable", "name": "VarHeatEnergy", "caption": "Wärmemenge Heizen [kWh / Zähler]" },
+            { "type": "CheckBox",       "name": "HeatEnergyIsCounter", "caption": "Heiz-Wärmemenge ist Zählerstand" }
+          ]
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            { "type": "SelectVariable", "name": "VarDHWEnergy",  "caption": "Wärmemenge Warmwasser [kWh / Zähler]" },
+            { "type": "CheckBox",       "name": "DHW_EnergyIsCounter", "caption": "WW-Wärmemenge ist Zählerstand" }
+          ]
+        },
+        {
+          "type": "Label",
+          "caption": "Hinweis: Diese Werte werden zur COP-Berechnung genutzt (COP gesamt/Heizen/WW)."
+        }
+      ]
     },
-    {
-      "type": "CheckBox",
-      "name": "HPIsCounter",
-      "caption": "WP Gesamt ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarImport",
-      "caption": "Netzbezug [kWh/Intervall oder Zähler]"
-    },
-    {
-      "type": "CheckBox",
-      "name": "ImportIsCounter",
-      "caption": "Netzbezug ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarExport",
-      "caption": "Einspeisung [kWh/Intervall oder Zähler] (optional)"
-    },
-    {
-      "type": "CheckBox",
-      "name": "ExportIsCounter",
-      "caption": "Einspeisung ist Zählerstand (kumuliert)"
-    },
-    {
-      "type": "SelectVariable",
-      "name": "VarSOC",
-      "caption": "Batterie-SoC [% , optional]"
-    },
+
+    { "type": "SelectVariable", "name": "VarImport", "caption": "Netzbezug [kWh/Intervall oder Zähler]" },
+    { "type": "CheckBox",       "name": "ImportIsCounter", "caption": "Netzbezug ist Zählerstand (kumuliert)" },
+
+    { "type": "SelectVariable", "name": "VarExport", "caption": "Einspeisung [kWh/Intervall oder Zähler] (optional)" },
+    { "type": "CheckBox",       "name": "ExportIsCounter", "caption": "Einspeisung ist Zählerstand (kumuliert)" },
+
+    { "type": "SelectVariable", "name": "VarSOC", "caption": "Batterie-SoC [% , optional]" },
+
     {
       "type": "NumberSpinner",
       "name": "StepMinutes",
@@ -105,7 +79,7 @@
           "caption": "Modus",
           "options": [
             { "caption": "Relativ (letzte X ...)", "value": "relative" },
-            { "caption": "Absolut (Von/Bis)", "value": "absolute" }
+            { "caption": "Absolut (Von/Bis)",      "value": "absolute" }
           ],
           "value": "relative"
         },
@@ -126,7 +100,7 @@
               "caption": "Einheit",
               "options": [
                 { "caption": "Stunden", "value": "hours" },
-                { "caption": "Tage", "value": "days" }
+                { "caption": "Tage",    "value": "days"  }
               ],
               "value": "days"
             },
@@ -142,7 +116,7 @@
           "type": "RowLayout",
           "items": [
             { "type": "SelectDateTime", "name": "FromDateTime", "caption": "Von (absolut)" },
-            { "type": "SelectDateTime", "name": "ToDateTime", "caption": "Bis (absolut)" }
+            { "type": "SelectDateTime", "name": "ToDateTime",   "caption": "Bis (absolut)" }
           ]
         },
         {
@@ -224,62 +198,18 @@
       "type": "ExpansionPanel",
       "caption": "Backfill – Historische Archiv-Daten schreiben",
       "items": [
-        {
-          "type": "SelectCategory",
-          "name": "BackfillCategoryID",
-          "caption": "Ziel-Kategorie für Backfill-Variablen"
-        },
+        { "type": "SelectCategory", "name": "BackfillCategoryID", "caption": "Ziel-Kategorie für Backfill-Variablen" },
         {
           "type": "RowLayout",
           "items": [
             { "type": "SelectDate", "name": "BF_FromDate", "caption": "Von (inkl.)" },
-            { "type": "SelectDate", "name": "BF_ToDate", "caption": "Bis (inkl.)" }
+            { "type": "SelectDate", "name": "BF_ToDate",   "caption": "Bis (inkl.)" }
           ]
         },
-        {
-          "type": "Label",
-          "caption": "Analysefenster automatisch: D–1 00:00 → D+1 00:00"
-        },
-        {
-          "type": "Button",
-          "caption": "Backfill jetzt starten",
-          "onClick": "DEFA_BackfillRange($id);"
-        },
-        {
-          "type": "Label",
-          "name": "BackfillLog",
-          "caption": ""
-        }
-      ]
-    },
-
-    {
-      "type": "ExpansionPanel",
-      "caption": "Backfill – täglich automatisch",
-      "items": [
-        {
-          "type": "CheckBox",
-          "name": "DailyBackfillEnabled",
-          "caption": "Täglichen Backfill (gestern) aktivieren"
-        },
-        {
-          "type": "ValidationTextBox",
-          "name": "DailyStartTime",
-          "caption": "Startzeit (HH:MM)",
-          "value": "02:30"
-        },
-        {
-          "type": "Button",
-          "caption": "Täglichen Backfill jetzt testen",
-          "onClick": "DEFA_RunDailyBackfillNow($id);"
-        },
-        {
-          "type": "Label",
-          "name": "DailyBackfillInfo",
-          "caption": "Start möglichst spät setzen, da Analyse für 'gestern' Daten aus 'heute' benötigt."
-        }
-      ]
-    }
+        { "type": "Label", "caption": "Analysefenster automatisch: D–1 00:00 → D+1 00:00" },
+        { "type": "Button", "caption": "Backfill jetzt starten" ,"onClick": "DEFA_BackfillRange($id);" },
+        { "type": "Label", "name": "BackfillLog", "caption": "" }
+      ]}
   ],
 
   "actions": [
@@ -291,19 +221,14 @@
         "caption": "Modulhilfe",
         "closeCaption": "Schließen",
         "items": [
-          {
-            "type": "Label",
-            "name": "HelpHtml",
-            "caption": "README wird geladen..."
-          }
+          { "type": "Label", "name": "HelpHtml", "caption": "README wird geladen..." }
         ]
       }
     },
     {
       "type": "Button",
       "caption": "Hilfe im Browser (HTML)",
-      "onClick": "DEFA_OpenHelp($id);",
-      
+      "onClick": "DEFA_OpenHelp($id);"
     },
     {
       "type": "Button",
@@ -313,8 +238,6 @@
     {
       "type": "Button",
       "caption": "Details als CSV exportieren",
-      "onClick": "DEFA_ExportDetails($id);",
-      
+      "onClick": "DEFA_ExportDetails($id);"
     }
-  ]
-}
+  ]}
