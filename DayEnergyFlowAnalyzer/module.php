@@ -1268,6 +1268,16 @@ class DayEnergyFlowAnalyzer extends IPSModule
     {
         $year = (int)date('Y');
 
+        function monthNameDe(int $year, int $m): string {
+            if (class_exists('IntlDateFormatter')) {
+                $date = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $year, $m));
+                return \IntlDateFormatter::formatObject($date, 'LLLL', 'de_DE');
+            }
+            static $de = [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August',
+                        'September','Oktober','November','Dezember'];
+            return $de[$m] ?? (string)$m;
+        }
+
         // 1) Template ohne Interpolation (NOWDOC)
         $tpl = <<<'PHP'
         <?php
@@ -1584,16 +1594,4 @@ class DayEnergyFlowAnalyzer extends IPSModule
             '{{YEAR}}'      => (string)$year,
         ]);
     } 
-
-    private function monthNameDe(int $year, int $m): string {
-        // 1) Wenn intl vorhanden ist, nutzen:
-        if (class_exists('IntlDateFormatter')) {
-            $date = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $year, $m));
-            return \IntlDateFormatter::formatObject($date, 'LLLL', 'de_DE');
-        }
-        // 2) Fallback ohne intl:
-        static $de = [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August',
-                    'September','Oktober','November','Dezember'];
-        return $de[$m] ?? (string)$m;
-    }
 }
