@@ -40,7 +40,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
         $this->RegisterPropertyInteger('VarSOC', 0);
 
-        // NEU: Wärmemengenzähler (Heizen & WW)
+        // Wärmemengenzähler (Heizen & WW)
         $this->RegisterPropertyInteger('VarHeatEnergy', 0);
         $this->RegisterPropertyBoolean('HeatEnergyIsCounter', false);
 
@@ -79,12 +79,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterVariableString('ResultJSON', 'Analyseergebnis (JSON)');
         $this->RegisterVariableString('ResultDetailsJSON', 'Intervall-Details (JSON)');
 
-        // NEU: COP-Variablen (mit Historie)
+        // COP-Variablen (mit Historie)
         $this->RegisterVariableFloat('COP_WP_Total', 'Arbeitszahl WP gesamt');
         $this->RegisterVariableFloat('COP_WP_Heating', 'Arbeitszahl Heizen');
         $this->RegisterVariableFloat('COP_WP_DHW', 'Arbeitszahl Warmwasser');
 
-        // --- Backfill: zielkategorie, datumsauswahl, daily-backfill ---
+        // Backfill-Parameter
         $this->RegisterPropertyInteger('BackfillCategoryID', 0);
         $this->RegisterPropertyString('BF_FromDate', '');
         $this->RegisterPropertyString('BF_ToDate', '');
@@ -95,7 +95,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterPropertyBoolean('DailyBackfillEnabled', true);
         $this->RegisterPropertyString('DailyStartTime', '02:30');
 
-        // Timer für täglichen Backfill (zunächst deaktiviert)
+        // Timer für täglichen Backfill
         $this->RegisterTimer('DEFA_DailyBackfillTimer', 0, 'DEFA_RunDailyBackfill($_IPS["TARGET"]);');
     }
 
@@ -103,7 +103,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
     {
         parent::ApplyChanges();
 
-        // --- täglicher Backfill Timer ---
+        // Daily Backfill Timer setzen
         $enabled = $this->ReadPropertyBoolean('DailyBackfillEnabled');
         $timeStr = $this->ReadPropertyString('DailyStartTime') ?: '02:30';
         $next = $this->calcNextRun($timeStr);
@@ -134,10 +134,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 throw new InvalidArgumentException('Bitte Archive Control auswählen.');
             }
 
-            // Brücke: Attribute aus Backfill überschreiben temporär Properties
+            // Zeitmodus (Backfill-Attribute überschreiben temporär die Properties)
             $mode  = $this->ReadAttributeString('BF_TimeRangeMode') ?: $this->ReadPropertyString('TimeRangeMode');
             $align = $this->ReadAttributeBoolean('BF_AlignToMinute') ?? $this->ReadPropertyBoolean('AlignToMinute');
 
+            // Quellen lesen
             $varPV   = $this->ReadPropertyInteger('VarPV');
             $pvC     = $this->ReadPropertyBoolean('PVIsCounter');
             $varLoad = $this->ReadPropertyInteger('VarLoad');
@@ -178,7 +179,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             if ($varHeat > 0 && !IPS_VariableExists($varHeat)) $varHeat = 0;
             if ($varDHW  > 0 && !IPS_VariableExists($varDHW))  $varDHW  = 0;
 
-            // Zeitfenster
+            // Zeitfenster bestimmen
             $tz = new DateTimeZone(date_default_timezone_get());
             if ($mode === 'absolute') {
                 $json = $this->ReadAttributeString('BF_FromDateTime');
@@ -215,7 +216,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $stepMin = max(1, (int)$this->ReadPropertyInteger('StepMinutes'));
             $grid = $this->buildGrid($from, $to, $stepMin); // G0..Gn
 
-            // Historie roh (Kumulativ→Delta falls Counter)
+            // Historie (Counter -> Delta)
             $pvRaw   = $this->readHistory($acID, $varPV , $from, $to, $pvC);
             $loadRaw = $this->readHistory($acID, $varLoad, $from, $to, $ldC);
             if ($hasDualHP) {
@@ -230,8 +231,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $impRaw  = $this->readHistory($acID, $varImp, $from, $to, $impC);
             $expRaw  = $varExp ? $this->readHistory($acID, $varExp, $from, $to, $expC) : [];
             $socRaw  = $varSOC ? $this->readHistorySOC($acID, $varSOC, $from, $to) : [];
-
-            // Wärmemenge
             $heatRaw = $varHeat ? $this->readHistory($acID, $varHeat, $from, $to, $heatC) : [];
             $dhwRaw  = $varDHW  ? $this->readHistory($acID, $varDHW , $from, $to, $dhwC ) : [];
 
@@ -241,11 +240,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $hpR   = $this->resampleEnergyBuckets($hpRaw  , $grid);
             $impR  = $this->resampleEnergyBuckets($impRaw , $grid);
             $expR  = $varExp ? $this->resampleEnergyBuckets($expRaw, $grid) : array_fill(0, count($grid), 0.0);
-
             $heatR = $this->resampleEnergyBuckets($heatRaw, $grid);
             $dhwR  = $this->resampleEnergyBuckets($dhwRaw , $grid);
-
-            $socR = $varSOC ? $this->resampleStateToGrid($socRaw, $grid) : array_fill(0, count($grid), null);
+            $socR  = $varSOC ? $this->resampleStateToGrid($socRaw, $grid) : array_fill(0, count($grid), null);
 
             // Komfort + JSON Params
             $params = [
@@ -267,7 +264,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 }
             }
 
-            // Intervall-Rows aus Buckets
+            // Intervall-Rows aus Buckets i=1..n-1 (Ende grid[i])
             $rows = [];
             for ($i=1; $i<count($grid); $i++) {
                 $rows[] = [
@@ -284,16 +281,15 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
             $result = $this->analyzeDay_Roll_WithBuckets($rows, $params, $grid);
 
-            // Sanity-Clamp
+            // Sanity: PV→WP nicht größer als HP
             if ($result['pv_to_wp_total_kwh'] > $result['hp_kwh'] + 1e-6) {
-                $this->SendDebug('Sanity','pv_to_wp_total_kwh clamped from '.$result['pv_to_wp_total_kwh'].' to hp_kwh '.$result['hp_kwh'],0);
                 $sumParts = max(1e-9, $result['pv_to_wp_direct_kwh'] + $result['bat_pv_to_wp_kwh']);
                 $result['pv_to_wp_total_kwh'] = $result['hp_kwh'];
                 $result['pv_to_wp_direct_kwh'] = round($result['pv_to_wp_direct_kwh'] * $result['hp_kwh'] / $sumParts, 3);
                 $result['bat_pv_to_wp_kwh']    = round($result['hp_kwh'] - $result['pv_to_wp_direct_kwh'], 3);
             }
 
-            // Core-Bereich für Summen (Zieltag)
+            // Core-Index für Zieltag bestimmen
             $tzName = (string)($params['tz'] ?? date_default_timezone_get());
             $tz2 = new DateTimeZone($tzName);
             $midIndex = intdiv(count($grid), 2);
@@ -522,7 +518,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
     private function resampleStateToGrid(array $series, array $grid): array
     {
-        // Last-Observation-Carried-Forward (LOCF)
+        // LOCF
         $res = [];
         $n = count($series);
         if ($n==0) { foreach ($grid as $_) $res[] = null; return $res; }
@@ -554,14 +550,14 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $epsImp = (float)($params['epsilon_import'] ?? 0.002);
         if (count($rows) < 1) throw new InvalidArgumentException('Zu wenige Intervalle.');
 
-        // Zieltag aus Mitte
+        // Zieltag (Mitte des Grid)
         $midIndex=intdiv(count($grid),2); $midTs=$grid[$midIndex];
         $targetDT=(new DateTimeImmutable('@'.$midTs))->setTimezone($tz);
         $targetDate=$targetDT->format('Y-m-d');
         $dayStartTs=(new DateTimeImmutable($targetDate.' 00:00:00',$tz))->getTimestamp();
         $dayEndTs  =(new DateTimeImmutable($targetDate.' 23:59:59',$tz))->getTimestamp();
 
-        // Core-Index
+        // Core-Index (nur Zieltag)
         $coreIdx=[]; foreach ($rows as $i=>$r) { $ts=$this->ts_from_any($r['t'],$tz); if ($ts >= $dayStartTs && $ts <= $dayEndTs) $coreIdx[]=$i; }
         if (empty($coreIdx)) throw new RuntimeException('Keine Intervalle im Zieltag '.$targetDate.' gefunden.');
 
@@ -679,24 +675,44 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
     private function backfillRangeEngine(DateTimeImmutable $from, DateTimeImmutable $to, int $catID, bool $dryRun): array
     {
-        $mv = [ 'hp'=>$this->GetIDForIdent('HP_kWh'), 'pvwp'=>$this->GetIDForIdent('PV_to_WP_total_kWh'), 'impR'=>$this->GetIDForIdent('Import_real_kWh'), 'impN'=>$this->GetIDForIdent('Import_no_wp_kWh'), 'net'=>$this->GetIDForIdent('WP_import_change_signed_kWh') ];
-        foreach ($mv as $vid) if ($vid <= 0) throw new Exception('Modul-Variable fehlt.');
+        // Modul-Variablen (Quelle)
+        $mv = [
+            'hp'  => $this->GetIDForIdent('HP_kWh'),
+            'pvwp'=> $this->GetIDForIdent('PV_to_WP_total_kWh'),
+            'impR'=> $this->GetIDForIdent('Import_real_kWh'),
+            'impN'=> $this->GetIDForIdent('Import_no_wp_kWh'),
+            'net' => $this->GetIDForIdent('WP_import_change_signed_kWh'),
+            'copT'=> $this->GetIDForIdent('COP_WP_Total'),
+            'copH'=> $this->GetIDForIdent('COP_WP_Heating'),
+            'copW'=> $this->GetIDForIdent('COP_WP_DHW')
+        ];
+        foreach ($mv as $k=>$vid) if ($vid <= 0) throw new Exception("Modul-Variable fehlt: $k");
+
+        // Zielvariablen anlegen (Backfill-Ordner)
         $targets = $this->ensureBackfillTargets($catID);
+
+        // Archive Control
         $acID = $this->ReadPropertyInteger('ArchiveControlID'); if ($acID <= 0) throw new Exception('ArchiveControl fehlt.');
 
-        $written = 0; $tz = new DateTimeZone(date_default_timezone_get());
+        $written = 0;
         try {
             for ($d=$from; $d <= $to; $d = $d->modify('+1 day')) {
                 $ymd = $d->format('Y-m-d');
+
+                // Analysefenster: D-1 .. D+1
                 $winFrom = $d->modify('-1 day')->setTime(0,0,0);
                 $winTo   = $d->modify('+1 day')->setTime(0,0,0);
-                // Attribute setzen für Analyze
+
+                // Attribute für Analyze setzen
                 $this->WriteAttributeString('BF_TimeRangeMode', 'absolute');
                 $this->WriteAttributeString('BF_FromDateTime', $this->dateToSelectJSON($winFrom));
                 $this->WriteAttributeString('BF_ToDateTime',   $this->dateToSelectJSON($winTo));
                 $this->WriteAttributeBoolean('BF_AlignToMinute', true);
+
+                // Analyse ausführen
                 $this->Analyze();
-                // zurücksetzen
+
+                // Attribute zurücksetzen
                 $this->WriteAttributeString('BF_TimeRangeMode', '');
                 $this->WriteAttributeString('BF_FromDateTime', '');
                 $this->WriteAttributeString('BF_ToDateTime', '');
@@ -709,34 +725,59 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $impN = (float)GetValueFloat($mv['impN']);
                 $net  = (float)GetValueFloat($mv['net']);
 
-                // Zähler: zwei Punkte/Tag
+                // COP aus Modulvariablen holen
+                $copT = (float)GetValueFloat($mv['copT']);
+                $copH = (float)GetValueFloat($mv['copH']);
+                $copW = (float)GetValueFloat($mv['copW']);
+
+                // ZÄHLER schreiben (00:00=0, 23:59=Summe)
                 $written += $this->writeCounterDay($acID, $targets['HP_kWh_Backfilled'], $ymd, $hp, $dryRun);
                 $written += $this->writeCounterDay($acID, $targets['PV_to_WP_total_kWh_Backfilled'], $ymd, $pvwp, $dryRun);
                 $written += $this->writeCounterDay($acID, $targets['Import_real_kWh_Backfilled'], $ymd, $impR, $dryRun);
                 $written += $this->writeCounterDay($acID, $targets['Import_no_wp_kWh_Backfilled'], $ymd, $impN, $dryRun);
                 $written += $this->writeCounterDay($acID, $targets['WP_import_change_signed_kWh_Backfilled'], $ymd, $net, $dryRun);
+
+                // COP als Ereigniswert (Tagesmitte) schreiben
+                $written += $this->writeEventDay($acID, $targets['COP_WP_Total_Backfilled'],   $ymd, $copT, $dryRun);
+                $written += $this->writeEventDay($acID, $targets['COP_WP_Heating_Backfilled'], $ymd, $copH, $dryRun);
+                $written += $this->writeEventDay($acID, $targets['COP_WP_DHW_Backfilled'],     $ymd, $copW, $dryRun);
             }
+
+            // Reaggregate aller Zielvariablen
             foreach ($targets as $vid) AC_ReAggregateVariable($acID, $vid);
         } finally { }
+
         return [$written, ($to->getTimestamp() - $from->getTimestamp())/86400 + 1];
     }
 
     private function ensureBackfillTargets(int $catID): array
     {
+        // Map mit Aggregationstyp: 1=Zähler, 0=Ereignis
         $map = [
-            'HP_kWh_Backfilled' => 'WP Tagesenergie [kWh]',
-            'PV_to_WP_total_kWh_Backfilled' => 'PV→WP [kWh]',
-            'Import_real_kWh_Backfilled' => 'Netzbezug mit WP [kWh]',
-            'Import_no_wp_kWh_Backfilled' => 'Netzbezug ohne WP [kWh]',
-            'WP_import_change_signed_kWh_Backfilled' => 'Netto-Effekt [kWh]'
+            'HP_kWh_Backfilled' => ['name'=>'WP Tagesenergie [kWh]','agg'=>1],
+            'PV_to_WP_total_kWh_Backfilled' => ['name'=>'PV→WP [kWh]','agg'=>1],
+            'Import_real_kWh_Backfilled' => ['name'=>'Netzbezug mit WP [kWh]','agg'=>1],
+            'Import_no_wp_kWh_Backfilled' => ['name'=>'Netzbezug ohne WP [kWh]','agg'=>1],
+            'WP_import_change_signed_kWh_Backfilled' => ['name'=>'Netto-Effekt [kWh]','agg'=>1],
+
+            // NEU: COP als Ereignisse
+            'COP_WP_Total_Backfilled'   => ['name'=>'COP Gesamt','agg'=>0],
+            'COP_WP_Heating_Backfilled' => ['name'=>'COP Heizen','agg'=>0],
+            'COP_WP_DHW_Backfilled'     => ['name'=>'COP Warmwasser','agg'=>0]
         ];
+
         $acID = $this->ReadPropertyInteger('ArchiveControlID');
         $out = [];
-        foreach ($map as $ident=>$name) {
+        foreach ($map as $ident=>$cfg) {
             $vid = @IPS_GetObjectIDByIdent($ident, $catID);
-            if (!$vid) { $vid = IPS_CreateVariable(VARIABLETYPE_FLOAT); IPS_SetParent($vid, $catID); IPS_SetName($vid, $name); IPS_SetIdent($vid, $ident); }
+            if (!$vid) {
+                $vid = IPS_CreateVariable(VARIABLETYPE_FLOAT);
+                IPS_SetParent($vid, $catID);
+                IPS_SetName($vid, $cfg['name']);
+                IPS_SetIdent($vid, $ident);
+            }
             AC_SetLoggingStatus($acID, $vid, true);
-            AC_SetAggregationType($acID, $vid, 1); // ZÄHLER
+            AC_SetAggregationType($acID, $vid, (int)$cfg['agg']);
             $out[$ident] = $vid;
         }
         return $out;
@@ -744,12 +785,21 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
     private function writeCounterDay(int $acID, int $varID, string $ymd, float $sum, bool $dryRun): int
     {
+        if ($dryRun) return 0;
         $tsStart = strtotime($ymd.' 00:00:00');
         $tsEnd   = strtotime($ymd.' 23:59:00');
-        if ($dryRun) { $this->SendDebug('Backfill/DRY', "Var#$varID 00:00=0 ; 23:59=$sum", 0); return 0; }
         AC_DeleteVariableData($acID, $varID, $tsStart, $tsEnd);
         AC_AddLoggedValues($acID, $varID, [ ['TimeStamp'=>$tsStart,'Value'=>0.0], ['TimeStamp'=>$tsEnd,'Value'=>$sum] ]);
         return 2;
+    }
+
+    private function writeEventDay(int $acID, int $varID, string $ymd, float $value, bool $dryRun): int
+    {
+        if ($dryRun) return 0;
+        $ts = strtotime($ymd.' 12:00:00'); // Tagesmitte
+        AC_DeleteVariableData($acID, $varID, $ts, $ts);
+        AC_AddLoggedValues($acID, $varID, [ ['TimeStamp'=>$ts,'Value'=>$value] ]);
+        return 1;
     }
 
     private function dateToSelectJSON(\DateTimeImmutable $dt): string
