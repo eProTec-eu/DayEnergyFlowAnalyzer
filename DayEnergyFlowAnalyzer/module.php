@@ -1264,7 +1264,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
     private function archiveDayExists(int $acID, int $varID, string $ymd): bool
     { $tsEnd = strtotime($ymd.' 23:59:00'); $data = AC_GetLoggedValues($acID, $varID, $tsEnd, $tsEnd, 0); return is_array($data) && count($data) > 0; }
 
-    private function buildDefaDashboardPhp(int $moduleId): string
+    private function buildDefaDashboardPhp(int $Id): string
     {
         $year = (int)date('Y');
 
@@ -1275,7 +1275,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         // -------------------------------------------
         // Modul- & Laufzeitparameter
         // -------------------------------------------
-        \$MODULE_ID = {$moduleId};
+        \$MODULE_ID = {$Id};
         \$YEAR      = (int)($_GET['year'] ?? {$year});
         \$FORMAT    = (string)($_GET['format'] ?? 'html'); // 'html' oder 'csv'
 
