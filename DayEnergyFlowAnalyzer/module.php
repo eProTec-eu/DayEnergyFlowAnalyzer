@@ -1550,6 +1550,15 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht tbody td:nth-child(n+7):nth-child(-n+9)   { background:#fafafa; } /* COP          */
             .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13) { background:#fffefe; } /* Energie      */
             .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15) { background:#fafafa; } /* Betriebsstd. */
+
+            /* DURCHGEHEND: rechte Kante der 1. Spalte (Monat) */
+            .wp-jahresuebersicht thead tr:first-child th:first-child,
+            .wp-jahresuebersicht thead tr:last-child  th:first-child,
+            .wp-jahresuebersicht tbody td:first-child,
+            .wp-jahresuebersicht tfoot td:first-child {
+            border-right: 2px solid #bdbdbd !important;
+            }
+
         </style>
         </head>
         <body>
