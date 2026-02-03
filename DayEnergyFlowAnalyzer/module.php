@@ -112,18 +112,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
         } else {
             $this->SetTimerInterval('DEFA_DailyBackfillTimer', 0);
         }
-
-        // COP-Variablen automatisch im Archiv loggen (Ereignis)
-        $acID = $this->ReadPropertyInteger('ArchiveControlID');
-        if ($acID > 0 && IPS_InstanceExists($acID)) {
-            foreach (['COP_WP_Total','COP_WP_Heating','COP_WP_DHW'] as $ident) {
-                $vid = $this->GetIDForIdent($ident);
-                if ($vid > 0) {
-                    @AC_SetLoggingStatus($acID, $vid, true);
-                    @AC_SetAggregationType($acID, $vid, 0); // Ereignis
-                }
-            }
-        }
     }
 
     public function Analyze()
