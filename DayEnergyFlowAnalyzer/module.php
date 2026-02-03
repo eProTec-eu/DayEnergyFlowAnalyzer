@@ -689,7 +689,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
         if (!is_dir($tempDir)) { @mkdir($tempDir, 0777, true); }
 
         // 8) SVG-Renderer (inline, keine externen Libs)
-        $makeSVG = function (string $key, string $title, array $perYear, string $filePath) {
+        $makeSVG = function (string $key, string $title, array $perYear, string $filePath)
+        {
             $width = 820; $height = 340;
             $marginL = 60; $marginR = 20; $marginT = 35; $marginB = 40;
             $plotW = $width - $marginL - $marginR;
@@ -704,23 +705,19 @@ class DayEnergyFlowAnalyzer extends IPSModule
             }
             if ($maxV <= 0) $maxV = 1.0;
 
-            // "schöne" Obergrenze (optional runden)
+            // "Schöne" Obergrenze (sanft)
             $power10 = pow(10, floor(log10($maxV)));
             $niceMax = ceil($maxV / $power10) * $power10;
-            if ($niceMax / $maxV > 4) { $niceMax = $maxV; } // nicht zu weit wegrunden
+            if ($niceMax / $maxV > 4) { $niceMax = $maxV; } // nicht übertreiben
             $yMax = $niceMax;
             $yTicks = 5;
             $yStep = $yMax / $yTicks;
 
             $colors = [
-                "#1f77b4", // blau
-                "#ff7f0e", // orange
-                "#2ca02c", // grün
-                "#d62728", // rot
-                "#9467bd", // lila
+                "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"
             ];
 
-            // Hilfsfunktionen
+            // Skalierungsfunktionen
             $sx = function($m) use ($months, $plotW, $marginL) {
                 $i = $m - 1;
                 $dx = (count($months) > 1) ? $plotW / (count($months) - 1) : 0;
@@ -737,8 +734,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
             echo '<svg xmlns="http://www.w3.org/2000/svg" width="'.$width.'" height="'.$height.'" viewBox="0 0 '.$width.' '.$height.'">' . "\n";
             echo '<rect x="0" y="0" width="'.$width.'" height="'.$height.'" fill="#ffffff"/>' . "\n";
 
-            // Titel
-            echo '<text x="'.($width/2).'" y="'.($marginT-12).'" text-anchor="middle" font-size="16" font-family="sans-serif">'.htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</text>'."\n";
+            // Titel (→ String casten, dann escapen)
+            $titleSafe = htmlspecialchars((string)$title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            echo '<text x="'.($width/2).'" y="'.($marginT-12).'" text-anchor="middle" font-size="16" font-family="sans-serif">'.$titleSafe.'</text>'."\n";
 
             // Achsen
             $x0 = $marginL; $y0 = $marginT + $plotH; $x1 = $marginL + $plotW; $y1 = $marginT;
@@ -765,7 +763,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             echo '<text x="14" y="'.($marginT + $plotH/2).'" text-anchor="middle" font-size="12" font-family="sans-serif" transform="rotate(-90 14,'.($marginT + $plotH/2).')">Wert</text>'."\n";
 
             // Linien je Jahr
-            $yearKeys = array_keys($perYear); // z.B. ["2026","2025","2024"]
+            $yearKeys = array_keys($perYear); // e.g. ["2026","2025","2024"] – kann numerisch sein → casten!
             $colorIdx = 0;
             foreach ($yearKeys as $yk) {
                 $vals = $perYear[$yk];
@@ -788,11 +786,13 @@ class DayEnergyFlowAnalyzer extends IPSModule
                     echo '<circle cx="'.$x.'" cy="'.$y.'" r="3" fill="'.$col.'" />'."\n";
                 }
 
-                // Legende
+                // Legende (→ Cast zu String vor htmlspecialchars!)
+                $ykStr = (string)$yk;
+                $ykSafe = htmlspecialchars($ykStr, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $lx = $marginL + 10 + 120 * (($colorIdx-1) % 5);
                 $ly = $marginT - 18;
                 echo '<rect x="'.($lx-18).'" y="'.($ly-10).'" width="12" height="12" fill="'.$col.'"/>';
-                echo '<text x="'.$lx.'" y="'.$ly.'" font-size="12" font-family="sans-serif">'.htmlspecialchars($yk, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</text>'."\n";
+                echo '<text x="'.$lx.'" y="'.$ly.'" font-size="12" font-family="sans-serif">'.$ykSafe.'</text>'."\n";
             }
 
             echo '</svg>';
