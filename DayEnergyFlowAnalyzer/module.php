@@ -97,6 +97,22 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
         // Timer für täglichen Backfill
         $this->RegisterTimer('DEFA_DailyBackfillTimer', 0, 'DEFA_RunDailyBackfill($_IPS["TARGET"]);');
+
+        // Dashboard-Properties
+        $this->RegisterPropertyInteger('Dash_HeatWMZ', 0);
+        $this->RegisterPropertyInteger('Dash_DHW_WMZ', 0);
+        $this->RegisterPropertyInteger('Dash_HeatPower', 0);
+        $this->RegisterPropertyInteger('Dash_DHW_Power', 0);
+        $this->RegisterPropertyInteger('Dash_TotalPower', 0);
+        $this->RegisterPropertyInteger('Dash_NettoEffect', 0);
+        $this->RegisterPropertyInteger('Dash_COP_Total', 0);
+        $this->RegisterPropertyInteger('Dash_COP_Heat', 0);
+        $this->RegisterPropertyInteger('Dash_COP_DHW', 0);
+        $this->RegisterPropertyInteger('Dash_PV', 0);
+        $this->RegisterPropertyInteger('Dash_Consumption', 0);
+        $this->RegisterPropertyInteger('Dash_GridBuy', 0);
+        $this->RegisterPropertyInteger('Dash_HeaterHours', 0);
+        $this->RegisterPropertyInteger('Dash_DHWHours', 0);
     }
 
     public function ApplyChanges()
