@@ -548,44 +548,54 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return;
         }
 
-        // 3) Aggregations-Metadaten: 1=Zähler/Summe, 0=Ereignis (Avg/Count)
+        // 3) Aggregations-Metadaten:
+        //    --> Bis auf COP alles ZÄHLER (Summe), Laufzeiten = Stunden aus Avg*Duration/3600
         $meta = [
-            "WMZ_Heizen" => ["agg" => 1, "field" => "Sum",   "title" => "WMZ Heizen"],
-            "WMZ_WW"     => ["agg" => 1, "field" => "Sum",   "title" => "WMZ Warmwasser"],
-            "WP_Heizen"  => ["agg" => 1, "field" => "Sum",   "title" => "WP Heizen"],
-            "WP_WW"      => ["agg" => 1, "field" => "Sum",   "title" => "WP Warmwasser"],
-            "WP_Gesamt"  => ["agg" => 1, "field" => "Sum",   "title" => "WP Gesamt"],
-            "Netto"      => ["agg" => 1, "field" => "Sum",   "title" => "Netto-Effekt"],
-            "PV"         => ["agg" => 1, "field" => "Sum",   "title" => "PV"],
-            "Haus"       => ["agg" => 1, "field" => "Sum",   "title" => "Hausverbrauch"],
-            "Netz"       => ["agg" => 1, "field" => "Sum",   "title" => "Netzbezug"],
-            // Ereignisse:
-            "COP_Total"  => ["agg" => 0, "field" => "Avg",   "title" => "COP Gesamt (Ø)"],
-            "COP_Heizen" => ["agg" => 0, "field" => "Avg",   "title" => "COP Heizen (Ø)"],
-            "COP_WW"     => ["agg" => 0, "field" => "Avg",   "title" => "COP Warmwasser (Ø)"],
-            "Std_Heizen" => ["agg" => 0, "field" => "Count", "title" => "WP-Heizstunden (Count)"],
-            "Std_WW"     => ["agg" => 0, "field" => "Count", "title" => "WP-WW-Stunden (Count)"],
+            // Zähler / Summen
+            "WMZ_Heizen" => ["field" => "Sum",    "title" => "WMZ Heizen"],
+            "WMZ_WW"     => ["field" => "Sum",    "title" => "WMZ Warmwasser"],
+            "WP_Heizen"  => ["field" => "Sum",    "title" => "WP Heizen"],
+            "WP_WW"      => ["field" => "Sum",    "title" => "WP Warmwasser"],
+            "WP_Gesamt"  => ["field" => "Sum",    "title" => "WP Gesamt"],
+            "Netto"      => ["field" => "Sum",    "title" => "Netto-Effekt"],
+            "PV"         => ["field" => "Sum",    "title" => "PV"],
+            "Haus"       => ["field" => "Sum",    "title" => "Hausverbrauch"],
+            "Netz"       => ["field" => "Sum",    "title" => "Netzbezug"],
+
+            // COP (keine Zähler): Monats-Durchschnitt
+            "COP_Total"  => ["field" => "Avg",    "title" => "COP Gesamt (Ø)"],
+            "COP_Heizen" => ["field" => "Avg",    "title" => "COP Heizen (Ø)"],
+            "COP_WW"     => ["field" => "Avg",    "title" => "COP Warmwasser (Ø)"],
+
+            // Laufzeitstunden (boolean geloggt): Stunden = Avg * Duration / 3600
+            "Std_Heizen" => ["field" => "OnHours","title" => "WP-Heizstunden"],
+            "Std_WW"     => ["field" => "OnHours","title" => "WP-WW-Stunden"],
         ];
 
         // Nur Meta für vorhandene Keys übernehmen
         $metaUsed = [];
         foreach ($valid as $k => $_) {
-            $metaUsed[$k] = $meta[$k] ?? ["agg" => 1, "field" => "Sum", "title" => $k];
+            $metaUsed[$k] = $meta[$k] ?? ["field" => "Sum", "title" => $k];
         }
 
         // 4) Jahre (aktuelles Jahr + zwei Vorjahre)
         $yearNow = (int)date("Y");
         $years   = [$yearNow, $yearNow - 1, $yearNow - 2];
 
-        // 5) Robuste Monatsaggregation (Zukunfts-Schutz, 6→5-Param-Fallback)
-        $aggMonth = function (int $varId, int $agg, string $field, int $y, int $m) use ($acID): float {
+        // 5) Robuste Monatsaggregation (immer Aggregationsstufe=Monat, Zukunfts-Schutz, 6→5-Param-Fallback)
+        //    Caches zur Beschleunigung
+        $loggedCache  = [];
+        $aggTypeCache = [];
+
+        $aggMonth = function (int $varId, string $field, int $y, int $m) use ($acID, &$loggedCache, &$aggTypeCache): float
+        {
+            // Zeitraum: kompletter Monat (bis 'jetzt' gekappt)
             $monthStart = strtotime(sprintf('%04d-%02d-01 00:00:00', $y, $m));
             $nextMonth  = strtotime(sprintf('%04d-%02d-01 00:00:00 +1 month', $y, $m));
             if ($monthStart === false || $nextMonth === false) {
                 $this->SendDebug("GenerateDiagrams/aggMonth", "Ungültiges Datum y=$y m=$m", 0);
                 return 0.0;
             }
-
             $now   = time();
             $start = $monthStart;
             $end   = min($nextMonth, $now);
@@ -598,51 +608,91 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 return 0.0;
             }
 
-            try {
-                $isLogged = @AC_GetLoggingStatus($acID, $varId);
-                if ($isLogged === false) {
+            // Logging-Status (optional; cachen)
+            $isLogged = true;
+            if (function_exists('AC_GetLoggingStatus')) {
+                if (array_key_exists($varId, $loggedCache)) {
+                    $isLogged = $loggedCache[$varId];
+                } else {
+                    try {
+                        $isLogged = (bool)@AC_GetLoggingStatus($acID, $varId);
+                    } catch (\Throwable $e) {
+                        $isLogged = true; // konservativer Fallback
+                    }
+                    $loggedCache[$varId] = $isLogged;
+                }
+                if (!$isLogged) {
                     $this->SendDebug("GenerateDiagrams/aggMonth", "Var $varId nicht geloggt → 0", 0);
                     return 0.0;
                 }
-            } catch (\Throwable $e) {
-                // ältere IPS-Versionen ohne AC_GetLoggingStatus → ignorieren
             }
 
-            $preferredField = $field;
-            $backupFields   = ($agg === 1) ? ["Sum"] : ["Avg", "Count"];
+            // Aggregationstyp (0=Standard, 1=Zähler) – cachen
+            $isCounter = false;
+            if (array_key_exists($varId, $aggTypeCache)) {
+                $isCounter = $aggTypeCache[$varId];
+            } else {
+                try {
+                    if (function_exists('AC_GetAggregationType')) {
+                        $isCounter = (@AC_GetAggregationType($acID, $varId) === 1);
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+                $aggTypeCache[$varId] = $isCounter;
+            }
 
+            // Monatsbucket holen (Aggregationsstufe=3), limit=1
             $rows = null;
             try {
-                $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end, 0);
+                $rows = @AC_GetAggregatedValues($acID, $varId, 3 /* Monat */, $start, $end, 1);
             } catch (\ArgumentCountError $e) {
-                try {
-                    $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
-                } catch (\Throwable $e2) {
-                    $this->SendDebug("GenerateDiagrams/aggMonth", "AC_GetAggregatedValues(5) Exception: ".$e2->getMessage(), 0);
-                    return 0.0;
-                }
+                $rows = @AC_GetAggregatedValues($acID, $varId, 3 /* Monat */, $start, $end);
             } catch (\Throwable $e) {
                 try {
-                    $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
+                    $rows = @AC_GetAggregatedValues($acID, $varId, 3 /* Monat */, $start, $end);
                 } catch (\Throwable $e2) {
                     $this->SendDebug("GenerateDiagrams/aggMonth", "AC_GetAggregatedValues Fallback Exception: ".$e2->getMessage(), 0);
                     return 0.0;
                 }
             }
-
             if (!is_array($rows) || count($rows) === 0) {
                 return 0.0;
             }
+            $r = $rows[0]; // Monat → genau 1 Bucket im Zeitraum
 
-            $r0 = $rows[0];
-            if (array_key_exists($preferredField, $r0) && is_numeric($r0[$preferredField])) {
-                return (float)$r0[$preferredField];
-            }
-            foreach ($backupFields as $bf) {
-                if (array_key_exists($bf, $r0) && is_numeric($r0[$bf])) {
-                    return (float)$r0[$bf];
+            $f = strtolower((string)$field);
+
+            // Laufzeitstunden: Stunden = Avg * Duration / 3600
+            if ($f === 'onhours' || $f === 'hours') {
+                if (array_key_exists('Avg', $r) && is_numeric($r['Avg']) &&
+                    array_key_exists('Duration', $r) && is_numeric($r['Duration'])) {
+                    return (float)$r['Avg'] * ((float)$r['Duration'] / 3600.0);
                 }
+                return 0.0;
             }
+
+            if ($f === 'sum') {
+                // Zähler: bevorzugt 'Sum', Fallback 'Avg' (Summe der Deltas)
+                if ($isCounter && array_key_exists('Sum', $r) && is_numeric($r['Sum'])) {
+                    return (float)$r['Sum'];
+                }
+                if (array_key_exists('Avg', $r) && is_numeric($r['Avg'])) {
+                    return (float)$r['Avg'];
+                }
+                return 0.0;
+            }
+
+            if ($f === 'avg') {
+                if (array_key_exists('Avg', $r) && is_numeric($r['Avg'])) {
+                    return (float)$r['Avg'];
+                }
+                return 0.0;
+            }
+
+            // Weitere Felder/Notfälle
+            if (array_key_exists($field, $r) && is_numeric($r[$field])) {
+                return (float)$r[$field];
+            }
+
             return 0.0;
         };
 
@@ -651,7 +701,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $titles = [];
         foreach ($valid as $key => $vid) {
             $cfg          = $metaUsed[$key];
-            $agg          = (int)$cfg["agg"];
             $field        = (string)$cfg["field"];
             $titles[$key] = (string)$cfg["title"];
 
@@ -663,7 +712,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                         $vals[] = 0.0;
                         continue;
                     }
-                    $vals[] = round($aggMonth($vid, $agg, $field, $y, $m), 6);
+                    $vals[] = round($aggMonth($vid, $field, $y, $m), 6);
                 }
                 $data[$key][(string)$y] = $vals;
             }
@@ -688,7 +737,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $tempDir   = $baseDir . 'temp/';             // .../user/temp/
         if (!is_dir($tempDir)) { @mkdir($tempDir, 0777, true); }
 
-        // 8) SVG-Renderer (inline, keine externen Libs)
+        // 8) SVG-Renderer (wie bei Dir)
         $makeSVG = function (string $key, string $title, array $perYear, string $filePath)
         {
             $width = 820; $height = 340;
@@ -734,14 +783,13 @@ class DayEnergyFlowAnalyzer extends IPSModule
             echo '<svg xmlns="http://www.w3.org/2000/svg" width="'.$width.'" height="'.$height.'" viewBox="0 0 '.$width.' '.$height.'">' . "\n";
             echo '<rect x="0" y="0" width="'.$width.'" height="'.$height.'" fill="#ffffff"/>' . "\n";
 
-            // Titel (→ String casten, dann escapen)
             $titleSafe = htmlspecialchars((string)$title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             echo '<text x="'.($width/2).'" y="'.($marginT-12).'" text-anchor="middle" font-size="16" font-family="sans-serif">'.$titleSafe.'</text>'."\n";
 
             // Achsen
             $x0 = $marginL; $y0 = $marginT + $plotH; $x1 = $marginL + $plotW; $y1 = $marginT;
-            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x1.'" y2="'.$y0.'" stroke="#333" stroke-width="1"/>'."\n"; // x-Achse
-            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x0.'" y2="'.$y1.'" stroke="#333" stroke-width="1"/>'."\n"; // y-Achse
+            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x1.'" y2="'.$y0.'" stroke="#333" stroke-width="1"/>'."\n";
+            echo '<line x1="'.$x0.'" y1="'.$y0.'" x2="'.$x0.'" y2="'.$y1.'" stroke="#333" stroke-width="1"/>'."\n";
 
             // Gitter + y-Ticks
             for ($i = 0; $i <= $yTicks; $i++) {
@@ -758,19 +806,17 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 echo '<line x1="'.$xx.'" y1="'.($y0).'" x2="'.$xx.'" y2="'.($y0+4).'" stroke="#333" stroke-width="1"/>'."\n";
                 echo '<text x="'.$xx.'" y="'.($y0+18).'" text-anchor="middle" font-size="12" font-family="sans-serif">'.$m.'</text>'."\n";
             }
-            // Achsenbeschriftungen
             echo '<text x="'.($width/2).'" y="'.($height-8).'" text-anchor="middle" font-size="12" font-family="sans-serif">Monat</text>'."\n";
             echo '<text x="14" y="'.($marginT + $plotH/2).'" text-anchor="middle" font-size="12" font-family="sans-serif" transform="rotate(-90 14,'.($marginT + $plotH/2).')">Wert</text>'."\n";
 
             // Linien je Jahr
-            $yearKeys = array_keys($perYear); // e.g. ["2026","2025","2024"] – kann numerisch sein → casten!
+            $yearKeys = array_keys($perYear);
             $colorIdx = 0;
             foreach ($yearKeys as $yk) {
                 $vals = $perYear[$yk];
                 $col  = $colors[$colorIdx % count($colors)];
                 $colorIdx++;
 
-                // Pfad
                 $d = '';
                 for ($i = 0; $i < count($vals); $i++) {
                     $x = $sx($i+1);
@@ -779,14 +825,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 }
                 echo '<path d="'.$d.'" fill="none" stroke="'.$col.'" stroke-width="2"/>'."\n";
 
-                // Punkte
                 for ($i = 0; $i < count($vals); $i++) {
                     $x = $sx($i+1);
                     $y = $sy($vals[$i]);
                     echo '<circle cx="'.$x.'" cy="'.$y.'" r="3" fill="'.$col.'" />'."\n";
                 }
 
-                // Legende (→ Cast zu String vor htmlspecialchars!)
                 $ykStr = (string)$yk;
                 $ykSafe = htmlspecialchars($ykStr, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $lx = $marginL + 10 + 120 * (($colorIdx-1) % 5);
@@ -809,7 +853,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $fname = "diagram_{$key}.svg";
             $fpath = $tempDir . $fname;
 
-            // SVG generieren
             $ok = $makeSVG($key, $title, $perYear, $fpath);
             if ($ok) {
                 $files[] = $fname;
