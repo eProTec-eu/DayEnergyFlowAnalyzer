@@ -213,16 +213,16 @@ class DayEnergyFlowAnalyzer extends IPSModule
     }
 
     public function ExportDetails()
-    { 
+    {
         $json = GetValueString($this->GetIDForIdent('ResultDetailsJSON'));
         if ($json === '') {
-            echo 'about:blank';
+            echo "about:blank";
             return;
         }
 
         $rows = json_decode($json, true);
         if (!is_array($rows) || empty($rows)) {
-            echo 'about:blank';
+            echo "about:blank";
             return;
         }
 
@@ -233,18 +233,38 @@ class DayEnergyFlowAnalyzer extends IPSModule
         foreach ($rows as $r) {
             $line = [];
             foreach ($keys as $k) {
-                $val = $r[$k] ?? '';
-                $line[] = $val;
+                $line[] = $r[$k] ?? "";
             }
             $csv .= implode(";", $line) . "\n";
         }
 
-        // Datei in /temp erstellen
-        $file = IPS_GetKernelDir() . "temp/defa_export_" . time() . ".csv";
-        file_put_contents($file, $csv);
+        // WebFront User-Verzeichnis
+        $baseDir = IPS_GetKernelDir() . "user/";
 
-        // Datei-URL erzeugen
-        $url = "http://" . $_SERVER['SERVER_ADDR'] . ":" . $_SERVER['SERVER_PORT'] . "/temp/" . basename($file);
+        // temp-Ordner sicherstellen
+        $tempDir = $baseDir . "temp/";
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0777, true);
+        }
+
+        // Datei erzeugen
+        $filename = "defa_export_" . time() . ".csv";
+        $fullPath = $tempDir . $filename;
+
+        file_put_contents($fullPath, $csv);
+
+        // IP bestimmen
+        $host = "127.0.0.1";
+        $net = Sys_GetNetworkInfo();
+        foreach ($net as $iface) {
+            if (!empty($iface["IP"]) && $iface["IP"] !== "127.0.0.1") {
+                $host = $iface["IP"];
+                break;
+            }
+        }
+
+        // Download-URL erzeugen
+        $url = "http://" . $host . ":3777/user/temp/" . $filename;
 
         echo $url;
     }
