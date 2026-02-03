@@ -1268,16 +1268,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
     {
         $year = (int)date('Y');
 
-        function monthNameDe(int $year, int $m): string {
-            if (class_exists('IntlDateFormatter')) {
-                $date = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $year, $m));
-                return \IntlDateFormatter::formatObject($date, 'LLLL', 'de_DE');
-            }
-            static $de = [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August',
-                        'September','Oktober','November','Dezember'];
-            return $de[$m] ?? (string)$m;
-        }
-
         // 1) Template ohne Interpolation (NOWDOC)
         $tpl = <<<'PHP'
         <?php
@@ -1293,6 +1283,16 @@ class DayEnergyFlowAnalyzer extends IPSModule
         // -------------------------------------------
         // Hilfen: Archiv & Aggregation
         // -------------------------------------------
+        function monthNameDe(int $year, int $m): string {
+            if (class_exists('IntlDateFormatter')) {
+                $date = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $year, $m));
+                return \IntlDateFormatter::formatObject($date, 'LLLL', 'de_DE');
+            }
+            static $de = [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August',
+                        'September','Oktober','November','Dezember'];
+            return $de[$m] ?? (string)$m;
+        }
+                    
         function getArchiveId(): int {
             // GUID Archive-Control: {43192F0B-135B-4CE7-A0A7-1475603F3060}
             $list = IPS_GetInstanceListByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
