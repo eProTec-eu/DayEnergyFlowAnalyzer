@@ -575,7 +575,24 @@ class DayEnergyFlowAnalyzer extends IPSModule
         PY;
 
         $result = IPS_RunScriptText($py);
-        $files  = explode(",", trim($result));
+
+        // Fehler abfangen: Ergebnis muss ein String sein
+        if (!is_string($result)) {
+            $this->SendDebug("GenerateDiagrams", "Python returned non-string: " . gettype($result), 0);
+            echo "[]";
+            return;
+        }
+
+        $result = trim($result);
+
+        // Wenn leer → nichts gefunden
+        if ($result === "" || $result === "true") {
+            $this->SendDebug("GenerateDiagrams", "Python returned empty/true", 0);
+            echo "[]";
+            return;
+        }
+
+        $files = explode(",", $result);
 
         $host = $this->getHost();
         echo json_encode(array_map(fn($f) => "http://{$host}:3777/user/temp/".$f, $files));
