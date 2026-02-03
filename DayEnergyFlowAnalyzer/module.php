@@ -263,10 +263,13 @@ class DayEnergyFlowAnalyzer extends IPSModule
         // Hilfe laden
         $html = file_get_contents($src);
 
-        // Zielpfad in Symcon WebFront (öffentlich erreichbar)
-        $targetDir = IPS_GetKernelDir() . "webfront/user/temp/";
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0777, true);
+        // Korrektes WebFront-Verzeichnis
+        $base = IPS_GetKernelDir() . "user/";
+
+        // temp-Unterordner sicherstellen
+        $tempDir = $base . "temp/";
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0777, true);
         }
 
         // Dateiname
