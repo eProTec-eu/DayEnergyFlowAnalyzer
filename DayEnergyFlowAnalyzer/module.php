@@ -462,7 +462,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->uiLog("Daily Backfill abgeschlossen: $written Punkte.");
     }
 
-    public function OpenDashboard(): void
+    public function OpenDashboard(): string
     {
         $host = $this->getHost();
 
@@ -492,13 +492,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
         }
         @chmod($filePath, 0664);
 
-        // Aufrufen
-        $url = "http://{$host}:3777/user/{$fileName}?year=$year";
-        if (!headers_sent()) {
-            header("Location: {$url}", true, 302);
-            exit;
-        }
-        echo '<a href="'.htmlspecialchars($url, ENT_QUOTES, 'UTF-8').'" target="_blank" rel="noopener">Dashboard öffnen</a>';
+    
+        //URL zurückgeben (Konsole öffnet den Link automatisch, weil in form.json link:true + echo …)
+        $url = "http://{$host}:3777/user/{$fileName}?year={$year}";
+        return $url;
     }
 
     public function ExportDashboardPDF()
