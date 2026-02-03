@@ -1292,7 +1292,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                         'September','Oktober','November','Dezember'];
             return $de[$m] ?? (string)$m;
         }
-                    
+
         function getArchiveId(): int {
             // GUID Archive-Control: {43192F0B-135B-4CE7-A0A7-1475603F3060}
             $list = IPS_GetInstanceListByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
@@ -1320,6 +1320,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
         // Formatierer (DE)
         function f1(float $v): string { return number_format($v, 1, ',', '.'); }
         function f2(float $v): string { return number_format($v, 2, ',', '.'); }
+        
+        // Schwelle für „praktisch Null“ (kWh) – vermeidet künstlich riesige COPs
+        const EPS_KWH = 0.05; // 50 Wh
 
         // -------------------------------------------
         // Property-IDs aus der Modulinstanz
@@ -1388,9 +1391,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
             for ($m=1; $m<=12; $m++) {
                 $wH = (float)$wmzH[$m];  $wW = (float)$wmzW[$m];
                 $eH = (float)$wpH[$m];   $eW = (float)$wpW[$m];  $eG = (float)$wpG[$m];
-                $copT = ($eG>0)?($wH+$wW)/$eG:0.0;
-                $copH = ($eH>0)?$wH/$eH:0.0;
-                $copW = ($eW>0)?$wW/$eW:0.0;
+
+                $copT = ($eG > EPS_KWH) ? ($wH + $wW) / $eG : 0.0;
+                $copH = ($eH > EPS_KWH) ?  $wH / $eH         : 0.0;
+                $copW = ($eW > EPS_KWH) ?  $wW / $eW         : 0.0;
+
 
                 $pvM   = (float)$pv[$m];
                 $hausM = (float)$haus[$m];
@@ -1465,6 +1470,72 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .btn { display:inline-block; padding:.45rem .7rem; border:1px solid #ccc; border-radius:.3rem; text-decoration:none; color:#222; background:#f7f7f7; }
             .btn:hover { background:#eee; }
             .year { font-weight:600; }
+            /* ============================
+            Gruppentrenner & Lesbarkeit
+            ============================
+
+            Spalten-Index pro Zeile (für Referenz):
+            1  = Monat
+            2  = Wärme Heizen
+            3  = Wärme WW                ← Trenner NACH Spalte 3
+            4  = WP Strom Heizen
+            5  = WP Strom WW
+            6  = WP Strom Gesamt         ← Trenner NACH Spalte 6
+            7  = COP Gesamt
+            8  = COP Heizen
+            9  = COP WW                  ← Trenner NACH Spalte 9
+            10 = PV
+            11 = Haus
+            12 = Netz gesamt
+            13 = Netz (WP)               ← Trenner NACH Spalte 13
+            14 = Betriebsstunden Heizen
+            15 = Betriebsstunden WW
+            */
+
+            /* 1) Vertikale Trennlinien zwischen den Gruppen (thead, tbody, tfoot) */
+            .wp-jahresuebersicht thead th:nth-child(3),
+            .wp-jahresuebersicht thead th:nth-child(6),
+            .wp-jahresuebersicht thead th:nth-child(9),
+            .wp-jahresuebersicht thead th:nth-child(13),
+            .wp-jahresuebersicht tbody td:nth-child(3),
+            .wp-jahresuebersicht tbody td:nth-child(6),
+            .wp.jahresuebersicht tbody td:nth-child(9),
+            .wp-jahresuebersicht tbody td:nth-child(13),
+            .wp-jahresuebersicht tfoot td:nth-child(3),
+            .wp-jahresuebersicht tfoot td:nth-child(6),
+            .wp-jahresuebersicht tfoot td:nth-child(9),
+            .wp-jahresuebersicht tfoot td:nth-child(13) {
+            border-right: 2px solid #bdbdbd; /* Stärke/Farbe nach Geschmack */
+            }
+
+            /* 2) Konsistente Zell-Padding, damit Linien „sauber“ wirken */
+            .wp-jahresuebersicht th,
+            .wp-jahresuebersicht td {
+            padding: .45rem .6rem;
+            }
+
+            /* 3) Optional: dezente Block-Hintergründe zur zusätzlichen Gruppierung
+                - sehr subtil (nur im tbody), damit die Kopf-/Fußzeilen neutral bleiben */
+            .wp-jahresuebersicht tbody td:nth-child(n+2):nth-child(-n+3)  { background: #fafafa; } /* Wärme (2–3) */
+            .wp-jahresuebersicht tbody td:nth-child(n+4):nth-child(-n+6)  { background: #fffefe; } /* WP Strom (4–6) */
+            .wp-jahresuebersicht tbody td:nth-child(n+7):nth-child(-n+9)  { background: #fafafa; } /* COP (7–9) */
+            .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13){ background: #fffefe; } /* Energie (10–13) */
+            .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15){ background: #fafafa; } /* Betriebsstd. (14–15) */
+
+            /* 4) Optional: Kopfzeile leicht hervorheben, Fußzeile dezent trennen */
+            .wp-jahresuebersicht thead th {
+            background: #f5f5f5;
+            border-bottom: 2px solid #bdbdbd;
+            }
+            .wp-jahresuebersicht tfoot td {
+            border-top: 2px solid #bdbdbd;
+            }
+
+            /* 5) Zahlenspalten rechtsbündig (falls noch nicht gesetzt) */
+            .wp-jahresuebersicht .num {
+            text-align: right;
+            white-space: nowrap;
+            }            
         </style>
         </head>
         <body>
@@ -1500,9 +1571,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
             for ($m=1; $m<=12; $m++) {
                 $wH = (float)$wmzH[$m];  $wW = (float)$wmzW[$m];
                 $eH = (float)$wpH[$m];   $eW = (float)$wpW[$m];  $eG = (float)$wpG[$m];
-                $copT = ($eG>0)?($wH+$wW)/$eG:0.0;
-                $copH = ($eH>0)?$wH/$eH:0.0;
-                $copW = ($eW>0)?$wW/$eW:0.0;
+                
+                $copT = ($eG > EPS_KWH) ? ($wH + $wW) / $eG : 0.0;
+                $copH = ($eH > EPS_KWH) ?  $wH / $eH         : 0.0;
+                $copW = ($eW > EPS_KWH) ?  $wW / $eW         : 0.0;
+
 
                 $pvM   = (float)$pv[$m];
                 $hausM = (float)$haus[$m];
