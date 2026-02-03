@@ -509,93 +509,233 @@ class DayEnergyFlowAnalyzer extends IPSModule
     public function GenerateDiagrams()
     {
         $acID = $this->ReadPropertyInteger('ArchiveControlID');
-        if ($acID <= 0) {
+        if ($acID <= 0 || !IPS_InstanceExists($acID)) {
+            $this->SendDebug("GenerateDiagrams", "ArchiveControl fehlt/ungültig", 0);
             echo "[]";
             return;
         }
 
+        // 1) Dash_* Properties lesen
         $vars = [
-            "WMZ_Heizen"      => $this->ReadPropertyInteger('Dash_HeatWMZ'),
-            "WMZ_WW"          => $this->ReadPropertyInteger('Dash_DHW_WMZ'),
-            "WP_Heizen"       => $this->ReadPropertyInteger('Dash_HeatPower'),
-            "WP_WW"           => $this->ReadPropertyInteger('Dash_DHW_Power'),
-            "WP_Gesamt"       => $this->ReadPropertyInteger('Dash_TotalPower'),
-            "Netto"           => $this->ReadPropertyInteger('Dash_NettoEffect'),
-            "COP_Total"       => $this->ReadPropertyInteger('Dash_COP_Total'),
-            "COP_Heizen"      => $this->ReadPropertyInteger('Dash_COP_Heat'),
-            "COP_WW"          => $this->ReadPropertyInteger('Dash_COP_DHW'),
-            "PV"              => $this->ReadPropertyInteger('Dash_PV'),
-            "Haus"            => $this->ReadPropertyInteger('Dash_Consumption'),
-            "Netz"            => $this->ReadPropertyInteger('Dash_GridBuy'),
-            "Std_Heizen"      => $this->ReadPropertyInteger('Dash_HeaterHours'),
-            "Std_WW"          => $this->ReadPropertyInteger('Dash_DHWHours')
+            "WMZ_Heizen"   => $this->ReadPropertyInteger('Dash_HeatWMZ'),
+            "WMZ_WW"       => $this->ReadPropertyInteger('Dash_DHW_WMZ'),
+            "WP_Heizen"    => $this->ReadPropertyInteger('Dash_HeatPower'),
+            "WP_WW"        => $this->ReadPropertyInteger('Dash_DHW_Power'),
+            "WP_Gesamt"    => $this->ReadPropertyInteger('Dash_TotalPower'),
+            "Netto"        => $this->ReadPropertyInteger('Dash_NettoEffect'),
+            "COP_Total"    => $this->ReadPropertyInteger('Dash_COP_Total'),
+            "COP_Heizen"   => $this->ReadPropertyInteger('Dash_COP_Heat'),
+            "COP_WW"       => $this->ReadPropertyInteger('Dash_COP_DHW'),
+            "PV"           => $this->ReadPropertyInteger('Dash_PV'),
+            "Haus"         => $this->ReadPropertyInteger('Dash_Consumption'),
+            "Netz"         => $this->ReadPropertyInteger('Dash_GridBuy'),
+            "Std_Heizen"   => $this->ReadPropertyInteger('Dash_HeaterHours'),
+            "Std_WW"       => $this->ReadPropertyInteger('Dash_DHWHours'),
         ];
 
-        $json = json_encode($vars);
-        $year = date("Y");
+        // 2) Ungültige Variablen verwerfen
+        $valid = [];
+        foreach ($vars as $key => $vid) {
+            if ($vid > 0 && @IPS_VariableExists($vid)) {
+                $valid[$key] = $vid;
+            } else {
+                $this->SendDebug("GenerateDiagrams", "Skip $key (id=$vid ungültig/nicht vorhanden)", 0);
+            }
+        }
+        if (empty($valid)) {
+            $this->SendDebug("GenerateDiagrams", "Keine gültigen Dash_* Variablen konfiguriert", 0);
+            echo "[]";
+            return;
+        }
+
+        // 3) Aggregations-Metadaten (Zähler vs. Ereignis)
+        //    agg: 1=Zähler (Sum), 0=Ereignis (Avg/Count)
+        $meta = [
+            "WMZ_Heizen" => ["agg" => 1, "field" => "Sum",  "title" => "WMZ Heizen"],
+            "WMZ_WW"     => ["agg" => 1, "field" => "Sum",  "title" => "WMZ Warmwasser"],
+            "WP_Heizen"  => ["agg" => 1, "field" => "Sum",  "title" => "WP Heizen"],
+            "WP_WW"      => ["agg" => 1, "field" => "Sum",  "title" => "WP Warmwasser"],
+            "WP_Gesamt"  => ["agg" => 1, "field" => "Sum",  "title" => "WP Gesamt"],
+            "Netto"      => ["agg" => 1, "field" => "Sum",  "title" => "Netto-Effekt"],
+            "PV"         => ["agg" => 1, "field" => "Sum",  "title" => "PV"],
+            "Haus"       => ["agg" => 1, "field" => "Sum",  "title" => "Hausverbrauch"],
+            "Netz"       => ["agg" => 1, "field" => "Sum",  "title" => "Netzbezug"],
+
+            // Ereignisse:
+            "COP_Total"  => ["agg" => 0, "field" => "Avg",  "title" => "COP Gesamt (Ø)"],
+            "COP_Heizen" => ["agg" => 0, "field" => "Avg",  "title" => "COP Heizen (Ø)"],
+            "COP_WW"     => ["agg" => 0, "field" => "Avg",  "title" => "COP Warmwasser (Ø)"],
+            "Std_Heizen" => ["agg" => 0, "field" => "Count","title" => "WP-Heizstunden (Count)"],
+            "Std_WW"     => ["agg" => 0, "field" => "Count","title" => "WP-WW-Stunden (Count)"],
+        ];
+
+        // Nur Meta für tatsächlich vorhandene Keys verwenden
+        $metaUsed = [];
+        foreach ($valid as $k => $_) {
+            $metaUsed[$k] = $meta[$k] ?? ["agg" => 1, "field" => "Sum", "title" => $k];
+        }
+
+        // 4) Jahresauswahl
+        $yearNow = (int)date("Y");
+        $years = [$yearNow, $yearNow - 1, $yearNow - 2];
+
+        // 5) Aggregationsfunktion (Monatswerte)
+        $aggMonth = function(int $varId, int $agg, string $field, int $y, int $m) use ($acID): float {
+            $start = strtotime(sprintf('%04d-%02d-01 00:00:00', $y, $m));
+            $end   = strtotime(sprintf('%04d-%02d-01 00:00:00 +1 month', $y, $m));
+            // Aggregationstyp am AC setzen/prüfen nicht nötig; wir lesen "on the fly".
+            $rows = @AC_GetAggregatedValues($acID, $varId, $agg, $start, $end);
+            if (!is_array($rows) || count($rows) === 0) return 0.0;
+            $r0 = $rows[0];
+            // Feld sicher auslesen
+            if (!array_key_exists($field, $r0)) {
+                // Fallbacks für Ereignisse
+                if ($agg === 0) {
+                    if ($field === "Avg" && array_key_exists("Avg", $r0)) return (float)$r0["Avg"];
+                    if ($field === "Count" && array_key_exists("Count", $r0)) return (float)$r0["Count"];
+                    if (array_key_exists("Avg", $r0)) return (float)$r0["Avg"];
+                }
+                // Fallbacks für Zähler
+                if ($agg === 1 && array_key_exists("Sum", $r0)) return (float)$r0["Sum"];
+                return 0.0;
+            }
+            $val = $r0[$field];
+            if (!is_numeric($val)) return 0.0;
+            return (float)$val;
+        };
+
+        // 6) Datenmatrix: pro Key → pro Jahr → 12 Monatswerte
+        $data = [];     // z.B. $data["PV"]["2026"] = [12 Werte]
+        $titles = [];   // Plot-Titel pro Key
+        foreach ($valid as $key => $vid) {
+            $cfg = $metaUsed[$key];
+            $agg = (int)$cfg["agg"];
+            $field = (string)$cfg["field"];
+            $titles[$key] = (string)$cfg["title"];
+            foreach ($years as $y) {
+                $vals = [];
+                for ($m = 1; $m <= 12; $m++) {
+                    $vals[] = round($aggMonth($vid, $agg, $field, $y, $m), 6);
+                }
+                $data[$key][(string)$y] = $vals;
+            }
+        }
+
+        // Prüfen, ob wenigstens irgendwo Daten != 0 existieren
+        $hasData = false;
+        foreach ($data as $perYear) {
+            foreach ($perYear as $series) {
+                if (array_sum($series) > 0) { $hasData = true; break 2; }
+            }
+        }
+        if (!$hasData) {
+            $this->SendDebug("GenerateDiagrams", "Alle Serien leer (Summen=0) – gebe [] zurück", 0);
+            echo "[]";
+            return;
+        }
+
+        // 7) Pfade & Ausgabeverzeichnis
+        $kernelDir = IPS_GetKernelDir();                           // /var/lib/symcon/
+        $baseDir   = $kernelDir . 'user/';                         // .../user/
+        $tempDir   = $baseDir . 'temp/';                           // .../user/temp/
+        if (!is_dir($tempDir)) { @mkdir($tempDir, 0777, true); }
+
+        // 8) Python-Code generieren (nur Plotten!), Daten/Titel als JSON übergeben
+        $dataJson   = json_encode($data,   JSON_UNESCAPED_SLASHES);
+        $titlesJson = json_encode($titles, JSON_UNESCAPED_SLASHES);
+        $yearsJson  = json_encode($years,  JSON_UNESCAPED_SLASHES);
 
         $py = <<<PY
-        import json, matplotlib
+        # -*- coding: utf-8 -*-
+        import json, os, sys
+        # Matplotlib ohne X-Server
+        import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        import os
 
-        vars = json.loads(r'''$json''')
-        base = "/var/lib/symcon/user/temp/"
+        data   = json.loads(r'''$dataJson''')
+        titles = json.loads(r'''$titlesJson''')
+        years  = json.loads(r'''$yearsJson''')
+
+        base = r"$tempDir"
         if not os.path.exists(base):
             os.makedirs(base)
 
-        def plot(key, title):
-            import subprocess, json
-            def month(var, y, m):
-                php = f"<?php echo json_encode(AC_GetAggregatedValues($acID, {var}, 1, strtotime('{y}-{m}-01'), strtotime('{y}-{m}-01 +1 month'))); ?>"
-                out = subprocess.check_output(["php", "-r", php]).decode()
-                try:
-                    v = json.loads(out)[0].get("Sum", 0)
-                    return v
-                except:
-                    return 0
-
-            data = {str(y): [month(vars[key], y, m) for m in range(1, 13)] for y in [$year, $year-1, $year-2]}
-
-            plt.figure(figsize=(8,4))
-            for y, vals in data.items():
-                plt.plot(range(1,13), vals, label=y)
-
-            plt.title(title)
-            plt.grid(True)
+        files = []
+        for key, perYear in data.items():
+            plt.figure(figsize=(8, 4))
+            months = list(range(1, 13))
+            # Jede Jahresreihe plotten
+            for y in years:
+                ys = str(y)
+                vals = perYear.get(ys, [0]*12)
+                plt.plot(months, vals, label=ys, marker='o')
+            plt.title(titles.get(key, key))
+            plt.xlabel("Monat")
+            plt.ylabel("Wert")
+            plt.grid(True, alpha=0.3)
+            plt.xticks(months)
             plt.legend()
-            f = f"diagram_{key}.png"
-            plt.savefig(base + f, bbox_inches='tight')
-            plt.close()
-            return f
+            fname = f"diagram_{key}.png"
+            fpath = os.path.join(base, fname)
+            try:
+                plt.savefig(fpath, bbox_inches='tight')
+                files.append(fname)
+            except Exception as e:
+                # einen Key auslassen, restliche weiter plotten
+                pass
+            finally:
+                plt.close()
 
-        files = [plot(k, k) for k in vars]
-        print(",".join(files))
+        # Ergebnis: Dateiliste kommasepariert
+        sys.stdout.write(",".join(files))
         PY;
 
-        $result = IPS_RunScriptText($py);
+        // 9) Python ausführbar ermitteln
+        $pythonCmd = trim((string)@shell_exec('command -v python3 2>/dev/null'));
+        if ($pythonCmd === '') {
+            $pythonCmd = trim((string)@shell_exec('command -v python 2>/dev/null'));
+        }
+        if ($pythonCmd === '') {
+            $this->SendDebug("GenerateDiagrams", "Python nicht gefunden (python3/python).", 0);
+            echo "[]";
+            return;
+        }
 
-        // Fehler abfangen: Ergebnis muss ein String sein
+        // 10) Python temporär schreiben & ausführen
+        $pyFile = $tempDir . 'defa_plot_' . time() . '_' . mt_rand(1000,9999) . '.py';
+        file_put_contents($pyFile, $py);
+        $cmd = escapeshellcmd($pythonCmd) . ' ' . escapeshellarg($pyFile) . ' 2>&1';
+        $result = shell_exec($cmd);
+        @unlink($pyFile);
+
+        // 11) Ergebnis robust prüfen
         if (!is_string($result)) {
-            $this->SendDebug("GenerateDiagrams", "Python returned non-string: " . gettype($result), 0);
+            $this->SendDebug("GenerateDiagrams", "Python-Ausgabe non-string: " . gettype($result), 0);
             echo "[]";
             return;
         }
-
         $result = trim($result);
-
-        // Wenn leer → nichts gefunden
-        if ($result === "" || $result === "true") {
-            $this->SendDebug("GenerateDiagrams", "Python returned empty/true", 0);
+        if ($result === '' || $result === 'true') {
+            $this->SendDebug("GenerateDiagrams", "Python-Ausgabe leer/true. CMD=$cmd", 0);
             echo "[]";
             return;
         }
 
-        $files = explode(",", $result);
+        // 12) URLs bauen
+        $files = array_filter(array_map('trim', explode(',', $result)));
+        if (empty($files)) {
+            $this->SendDebug("GenerateDiagrams", "Keine Dateien erzeugt", 0);
+            echo "[]";
+            return;
+        }
 
         $host = $this->getHost();
-        echo json_encode(array_map(fn($f) => "http://{$host}:3777/user/temp/".$f, $files));
+        $urls = array_map(function ($f) use ($host) {
+            return "http://{$host}:3777/user/temp/" . $f;
+        }, $files);
+
+        echo json_encode($urls);
     }
 
     private function getHost()
