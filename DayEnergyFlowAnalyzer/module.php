@@ -1555,6 +1555,76 @@ class DayEnergyFlowAnalyzer extends IPSModule
             /* Nutzen wir gezielt für die senkrechte Linie rechts neben "Monat" */
             .vsep-right { border-right: 2px solid #bdbdbd !important; }
 
+
+            /* Alle alten vertikalen Trenner neutralisieren */
+            .wp-jahresuebersicht th,
+            .wp-jahresuebersicht td {
+            border-right: none !important; /* nur für die von dir gesetzten Trenner, die normalen bottom-borders bleiben */
+            }
+
+
+            /* Ein universeller, breitenloser Trenner:
+            -2px nach innen (rechts), 0 Stärke → senkrechte Linie */
+            :root {
+            --sep-color: #bdbdbd;
+            --sep-color-head: #c8c8c8; /* Kopf leicht heller */
+            --sep-w: 2px;              /* Linienstärke */
+            }
+
+            /* Linie rechts ohne Layoutänderung */
+            .sep-r {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color) !important;
+            }
+
+            /* Kopf dezenter */
+            .sep-r-head {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color-head) !important;
+            }
+
+            /* ---------- THEAD (zweizeilig) ---------- */
+
+            /* 1) Erste THEAD-Zeile (Gruppenzeile mit colspan):
+                Nach jedem Gruppen-TH (1..5) eine Linie */
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(1),
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(2),
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(3),
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(4),
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(5) {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color-head);
+            }
+
+            /* 2) Zweite THEAD-Zeile (Einzelspalten):
+                Linien nach 1, 3, 6, 9, 13 */
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(1),
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(3),
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(6),
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(9),
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(13) {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color);
+            }
+
+            /* ---------- TBODY / TFOOT ---------- */
+
+            /* Durchgehende Gruppentrenner nach 1 / 3 / 6 / 9 / 13 */
+            .wp-jahresuebersicht tbody td:nth-child(1),
+            .wp-jahresuebersicht tbody td:nth-child(3),
+            .wp-jahresuebersicht tbody td:nth-child(6),
+            .wp-jahresuebersicht tbody td:nth-child(9),
+            .wp-jahresuebersicht tbody td:nth-child(13),
+            .wp-jahresuebersicht tfoot td:nth-child(1),
+            .wp-jahresuebersicht tfoot td:nth-child(3),
+            .wp-jahresuebersicht tfoot td:nth-child(6),
+            .wp-jahresuebersicht tfoot td:nth-child(9),
+            .wp-jahresuebersicht tfoot td:nth-child(13) {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color);
+            }
+
+            /* ---------- „Monat“-Spalte als Klasse (falls gesetzt) ---------- */
+            /* Falls du an den 'Monat'-Zellen schon class="vsep-right" gesetzt hast: */
+            .vsep-right {
+            box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color) !important;
+            }
+
         </style>
         </head>
         <body>
