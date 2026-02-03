@@ -254,18 +254,42 @@ class DayEnergyFlowAnalyzer extends IPSModule
     public function OpenHelp()
     {
         $src = __DIR__ . '/docs/help.html';
+
         if (!file_exists($src)) {
-            echo 'about:blank';
+            echo "about:blank";
             return;
         }
 
-        $content = file_get_contents($src);
+        // Hilfe laden
+        $html = file_get_contents($src);
 
-        $file = IPS_GetKernelDir() . "temp/defa_help_" . time() . ".html";
-        file_put_contents($file, $content);
+        // Zielpfad in Symcon WebFront (öffentlich erreichbar)
+        $targetDir = IPS_GetKernelDir() . "webfront/user/temp/";
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
 
-        $url = "http://" . $_SERVER['SERVER_ADDR'] . ":" . $_SERVER['SERVER_PORT'] . "/temp/" . basename($file);
+        // Dateiname
+        $filename = "defa_help_" . time() . ".html";
+        $targetFile = $targetDir . $filename;
 
+        // Speichern
+        file_put_contents($targetFile, $html);
+
+        // IP holen (erste aktive IP)
+        $ips = Sys_GetNetworkInfo();
+        $host = "127.0.0.1";
+        foreach ($ips as $i) {
+            if ($i["IP"] != "127.0.0.1" && $i["IP"] != "") {
+                $host = $i["IP"];
+                break;
+            }
+        }
+
+        // URL bauen (Port 3777 ist immer Webserver)
+        $url = "http://" . $host . ":3777/user/temp/" . $filename;
+
+        // Rückgabe an Browser
         echo $url;
     }
 
