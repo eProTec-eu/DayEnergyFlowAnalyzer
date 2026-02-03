@@ -1470,59 +1470,33 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .btn { display:inline-block; padding:.45rem .7rem; border:1px solid #ccc; border-radius:.3rem; text-decoration:none; color:#222; background:#f7f7f7; }
             .btn:hover { background:#eee; }
             .year { font-weight:600; }
-            /* ============================
-            Gruppentrenner & Lesbarkeit
-            ============================
-
-            Spalten-Index pro Zeile (für Referenz):
-            1  = Monat
-            2  = Wärme Heizen
-            3  = Wärme WW                ← Trenner NACH Spalte 3
-            4  = WP Strom Heizen
-            5  = WP Strom WW
-            6  = WP Strom Gesamt         ← Trenner NACH Spalte 6
-            7  = COP Gesamt
-            8  = COP Heizen
-            9  = COP WW                  ← Trenner NACH Spalte 9
-            10 = PV
-            11 = Haus
-            12 = Netz gesamt
-            13 = Netz (WP)               ← Trenner NACH Spalte 13
-            14 = Betriebsstunden Heizen
-            15 = Betriebsstunden WW
+            /* =========================================
+            Gruppentrenner & Lesbarkeit (final)
+            =========================================
+            Spalten (1..15):
+            1  Monat
+            2–3  Wärme (kWh)
+            4–6  WP Strom (kWh)
+            7–9  COP
+            10–13 Energie (kWh)
+            14–15 Betriebsstunden
             */
 
-            /* 1) Vertikale Trennlinien zwischen den Gruppen (thead, tbody, tfoot) */
-            .wp-jahresuebersicht thead th:nth-child(3),
-            .wp-jahresuebersicht thead th:nth-child(6),
-            .wp-jahresuebersicht thead th:nth-child(9),
-            .wp-jahresuebersicht thead th:nth-child(13),
-            .wp-jahresuebersicht tbody td:nth-child(3),
-            .wp-jahresuebersicht tbody td:nth-child(6),
-            .wp.jahresuebersicht tbody td:nth-child(9),
-            .wp-jahresuebersicht tbody td:nth-child(13),
-            .wp-jahresuebersicht tfoot td:nth-child(3),
-            .wp-jahresuebersicht tfoot td:nth-child(6),
-            .wp-jahresuebersicht tfoot td:nth-child(9),
-            .wp-jahresuebersicht tfoot td:nth-child(13) {
-            border-right: 2px solid #bdbdbd; /* Stärke/Farbe nach Geschmack */
+            /* Grund-Layout */
+            .wp-jahresuebersicht {
+            width: 100%;
+            border-collapse: collapse;   /* wichtig, damit Linien bündig wirken */
+            table-layout: fixed;
             }
-
-            /* 2) Konsistente Zell-Padding, damit Linien „sauber“ wirken */
             .wp-jahresuebersicht th,
             .wp-jahresuebersicht td {
             padding: .45rem .6rem;
+            border-bottom: 1px solid #e0e0e0;
             }
+            .wp-jahresuebersicht th[scope="row"] { text-align: left; }
+            .wp-jahresuebersicht .num { text-align: right; white-space: nowrap; }
 
-            /* 3) Optional: dezente Block-Hintergründe zur zusätzlichen Gruppierung
-                - sehr subtil (nur im tbody), damit die Kopf-/Fußzeilen neutral bleiben */
-            .wp-jahresuebersicht tbody td:nth-child(n+2):nth-child(-n+3)  { background: #fafafa; } /* Wärme (2–3) */
-            .wp-jahresuebersicht tbody td:nth-child(n+4):nth-child(-n+6)  { background: #fffefe; } /* WP Strom (4–6) */
-            .wp-jahresuebersicht tbody td:nth-child(n+7):nth-child(-n+9)  { background: #fafafa; } /* COP (7–9) */
-            .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13){ background: #fffefe; } /* Energie (10–13) */
-            .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15){ background: #fafafa; } /* Betriebsstd. (14–15) */
-
-            /* 4) Optional: Kopfzeile leicht hervorheben, Fußzeile dezent trennen */
+            /* Kopf & Fuß dezent hervorheben */
             .wp-jahresuebersicht thead th {
             background: #f5f5f5;
             border-bottom: 2px solid #bdbdbd;
@@ -1531,10 +1505,67 @@ class DayEnergyFlowAnalyzer extends IPSModule
             border-top: 2px solid #bdbdbd;
             }
 
-            /* 5) Zahlenspalten rechtsbündig (falls noch nicht gesetzt) */
-            .wp-jahresuebersicht .num {
-            text-align: right;
-            white-space: nowrap;
+            /* --- Vertikale Gruppentrenner (Thead/Tbody/Tfoot konsistent) --- */
+
+            /* Linie nach Spalte 1 (trennt "Monat" von den Gruppen) */
+            .wp-jahresuebersicht thead th:nth-child(1),
+            .wp-jahresuebersicht tbody td:nth-child(1),
+            .wp-jahresuebersicht tfoot td:nth-child(1) {
+            border-right: 2px solid #bdbdbd;
+            }
+
+            /* Linien nach 3, 6, 9, 13 (zwischen den Gruppen) */
+            .wp-jahresuebersicht thead th:nth-child(3),
+            .wp-jahresuebersicht thead th:nth-child(6),
+            .wp-jahresuebersicht thead th:nth-child(9),
+            .wp-jahresuebersicht thead th:nth-child(13),
+            .wp-jahresuebersicht tbody td:nth-child(3),
+            .wp-jahresuebersicht tbody td:nth-child(6),
+            .wp-jahresuebersicht tbody td:nth-child(9),
+            .wp-jahresuebersicht tbody td:nth-child(13),
+            .wp-jahresuebersicht tfoot td:nth-child(3),
+            .wp-jahresuebersicht tfoot td:nth-child(6),
+            .wp-jahresuebersicht tfoot td:nth-child(9),
+            .wp-jahresuebersicht tfoot td:nth-child(13) {
+            border-right: 2px solid #bdbdbd;
+            }
+
+            /* Optional: angeschnittene Linien im Kopf doppelt vermeiden
+            (schmälere Gruppenlinie im Kopf) */
+            .wp-jahresuebersicht thead th:nth-child(1),
+            .wp-jahresuebersicht thead th:nth-child(3),
+            .wp-jahresuebersicht thead th:nth-child(6),
+            .wp-jahresuebersicht thead th:nth-child(9),
+            .wp-jahresuebersicht thead th:nth-child(13) {
+            border-right-color: #c8c8c8; /* leicht heller im Thead */
+            }
+
+            /* --- Dezente Block-Hintergründe für Tbody (optional) --- */
+            .wp-jahresuebersicht tbody td:nth-child(n+2):nth-child(-n+3)   { background: #fafafa; } /* Wärme (2–3)   */
+            .wp-jahresuebersicht tbody td:nth-child(n+4):nth-child(-n+6)   { background: #fffefe; } /* WP Strom (4–6)*/
+            .wp-jahresuebersicht tbody td:nth-child(n+7):nth-child(-n+9)   { background: #fafafa; } /* COP (7–9)     */
+            .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13) { background: #fffefe; } /* Energie (10–13)*/
+            .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15) { background: #fafafa; } /* Betriebsstd.  */
+
+            /* --- Responsive Feintuning: auf ganz schmalen Screens Linien etwas dezenter --- */
+            @media (max-width: 700px) {
+            .wp-jahresuebersicht thead th:nth-child(1),
+            .wp-jahresuebersicht thead th:nth-child(3),
+            .wp-jahresuebersicht thead th:nth-child(6),
+            .wp-jahresuebersicht thead th:nth-child(9),
+            .wp-jahresuebersicht thead th:nth-child(13),
+            .wp-jahresuebersicht tbody td:nth-child(1),
+            .wp-jahresuebersicht tbody td:nth-child(3),
+            .wp-jahresuebersicht tbody td:nth-child(6),
+            .wp-jahresuebersicht tbody td:nth-child(9),
+            .wp-jahresuebersicht tbody td:nth-child(13),
+            .wp-jahresuebersicht tfoot td:nth-child(1),
+            .wp-jahresuebersicht tfoot td:nth-child(3),
+            .wp-jahresuebersicht tfoot td:nth-child(6),
+            .wp-jahresuebersicht tfoot td:nth-child(9),
+            .wp-jahresuebersicht tfoot td:nth-child(13) {
+                border-right-width: 1px;   /* filigraner auf kleinen Displays */
+            }
             }            
         </style>
         </head>
