@@ -1470,25 +1470,29 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .btn { display:inline-block; padding:.45rem .7rem; border:1px solid #ccc; border-radius:.3rem; text-decoration:none; color:#222; background:#f7f7f7; }
             .btn:hover { background:#eee; }
             .year { font-weight:600; }
-            /* =========================================
-            Tabellenlayout mit durchgehenden Gruppen-
-            Trennern (funktionierende Version)
-            ========================================= */
-
+            /* Basislayout */
             .wp-jahresuebersicht {
                 width: 100%;
                 border-collapse: collapse;
                 table-layout: fixed;
             }
 
-            /* Zellen-Grundformat */
             .wp-jahresuebersicht th,
             .wp-jahresuebersicht td {
                 padding: .45rem .6rem;
                 border-bottom: 1px solid #e0e0e0;
             }
 
-            /* Header & Footer */
+            .wp-jahresuebersicht th[scope="row"] {
+                text-align: left;
+            }
+
+            .wp-jahresuebersicht .num {
+                text-align: right;
+                white-space: nowrap;
+            }
+
+            /* Kopf- und Fußzeile */
             .wp-jahresuebersicht thead th {
                 background: #f5f5f5;
                 border-bottom: 2px solid #bdbdbd;
@@ -1497,34 +1501,18 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 border-top: 2px solid #bdbdbd;
             }
 
-            .wp-jahresuebersicht th[scope="row"] {
-                text-align: left;
-            }
-            .wp-jahresuebersicht .num {
-                text-align: right;
-                white-space: nowrap;
-            }
+            /* ============================================
+            DURCHGEHENDE GRUPPENTRENNLINIEN
+            ============================================ */
 
-            /* =========================================
-            DURCHGEHENDE vertikale Gruppen-Trennlinien
-            =========================================
-            Spalten:
-            1  = Monat
-            2–3  = Wärme
-            4–6  = WP Strom
-            7–9  = COP
-            10–13 = Energie
-            14–15 = Betriebsstunden
-            */
-
-            /* Linie nach Spalte 1 (Trennt 'Monat' von den Gruppen) */
+            /* Spalte 1 — Linie rechts (Monat → Wärme) */
             .wp-jahresuebersicht thead th:nth-child(1),
             .wp-jahresuebersicht tbody td:nth-child(1),
             .wp-jahresuebersicht tfoot td:nth-child(1) {
                 border-right: 2px solid #bdbdbd;
             }
 
-            /* Linien nach 3, 6, 9, 13 (Gruppengrenzen) */
+            /* Zwischen den Gruppen: Wärme (3), WP Strom (6), COP (9), Energie (13) */
             .wp-jahresuebersicht thead th:nth-child(3),
             .wp-jahresuebersicht thead th:nth-child(6),
             .wp-jahresuebersicht thead th:nth-child(9),
@@ -1535,26 +1523,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht tbody td:nth-child(13),
             .wp-jahresuebersicht tfoot td:nth-child(3),
             .wp-jahresuebersicht tfoot td:nth-child(6),
-            $wp-jahresuebersicht tfoot td:nth-child(9),
-            $wp-jahresuebersicht tfoot td:nth-child(13) {
+            .wp-jahresuebersicht tfoot td:nth-child(9),
+            .wp-jahresuebersicht tfoot td:nth-child(13) {
                 border-right: 2px solid #bdbdbd;
             }
-
-            /* Kopf optisch etwas feiner */
-            .wp-jahresuebersicht thead th:nth-child(1),
-            .wp-jahresuebersicht thead th:nth-child(3),
-            .wp-jahresuebersicht thead th:nth-child(6),
-            .wp-jahresuebersicht thead th:nth-child(9),
-            .wp-jahresuebersicht thead th:nth-child(13) {
-                border-right-color: #c8c8c8;
-            }
-
-            /* Optionale Gruppenhintergründe (weiche Streifen) */
-            .wp-jahresuebersicht tbody td:nth-child(n+2):nth-child(-n+3)   { background:#fafafa; } /* Wärme */
-            .wp-jahresuebersicht tbody td:nth-child(n+4):nth-child(-n+6)   { background:#fffefe; } /* WP Strom */
-            .wp-jahresuebersicht tbody td:nth-child(n+7):nth-child(-n+9)   { background:#fafafa; } /* COP */
-            .wp-jahresuebersicht tbody td:nth-child(n+10):nth-child(-n+13) { background:#fffefe; } /* Energie */
-            .wp-jahresuebersicht tbody td:nth-child(n+14):nth-child(-n+15) { background:#fafafa; } /* Betriebsstd. */
         </style>
         </head>
         <body>
