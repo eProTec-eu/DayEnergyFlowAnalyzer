@@ -1639,7 +1639,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         <table class="wp-jahresuebersicht">
             <thead>
             <tr>
-                <th class="vsep-right">Monat</th
+                <th class="vsep-right">Monat</th>
                 <th scope="col" colspan="2">Wärme (kWh)</th>
                 <th scope="col" colspan="3">WP&nbsp;Strom (kWh)</th>
                 <th scope="col" colspan="3">COP</th>
