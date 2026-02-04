@@ -1460,7 +1460,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         <title>WP Jahresübersicht <?=htmlspecialchars((string)$YEAR, ENT_QUOTES, 'UTF-8')?></title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
-            /*body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+            body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
             table { width: 100%; border-collapse: collapse; table-layout: fixed; }
             th, td { padding: .4rem .6rem; border-bottom: 1px solid #e0e0e0; }
             th[scope="row"] { text-align: left; }
@@ -1469,7 +1469,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .toolbar { margin: .5rem 0 1rem; display:flex; gap:.5rem; flex-wrap:wrap; }
             .btn { display:inline-block; padding:.45rem .7rem; border:1px solid #ccc; border-radius:.3rem; text-decoration:none; color:#222; background:#f7f7f7; }
             .btn:hover { background:#eee; }
-            .year { font-weight:600; }*/
+            .year { font-weight:600; }
 
             /* --- WebFront Popup Fix --- */
             html, body {
