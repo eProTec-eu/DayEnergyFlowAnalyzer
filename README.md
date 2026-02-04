@@ -119,6 +119,14 @@ Zielvariablen werden automatisch erzeugt:
 
 ---
 
+## 💙 Unterstützung
+
+Wenn dir das IP‑Symcon Modul gefällt oder du die Weiterentwicklung unterstützen möchtest, freue ich mich über eine Spende:
+
+[💙 Jetzt per PayPal spenden](https://www.paypal.com/pool/9mms4CEXrr?sr=wccr)
+
+---
+
 # 📄 Lizenz (MIT License)
 
 ```
