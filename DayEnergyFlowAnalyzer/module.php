@@ -1399,7 +1399,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $wpH  = getMonthly($ac, $id_wpH,    $YEAR);
         $wpW  = getMonthly($ac, $id_wpW,    $YEAR);
         //$wpG  = getMonthly($ac, $id_wpG,    $YEAR);
-        $wpG  = array_map(fn($x, $y) => $x + $y, $wpH, $wpW);
+        foreach ($wpH as $i => $value) {
+            $wpG[$i] = $wpH[$i] + $wpW[$i];
+        }
 
         $pv   = getMonthly($ac, $id_pv,     $YEAR);
         $haus = getMonthly($ac, $id_haus,   $YEAR);
