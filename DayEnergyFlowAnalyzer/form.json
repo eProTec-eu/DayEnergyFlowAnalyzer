@@ -151,6 +151,34 @@
     },
 
     {
+      "type": "ExpansionPanel",
+      "caption": "Backfill – täglich automatisch",
+      "items": [
+        {
+          "type": "CheckBox",
+          "name": "DailyBackfillEnabled",
+          "caption": "Täglichen Backfill (gestern) aktivieren"
+        },
+        {
+          "type": "ValidationTextBox",
+          "name": "DailyStartTime",
+          "caption": "Startzeit (HH:MM)",
+          "value": "02:30"
+        },
+        {
+          "type": "Button",
+          "caption": "Täglichen Backfill jetzt testen",
+          "onClick": "DEFA_RunDailyBackfillNow($id);"
+        },
+        {
+          "type": "Label",
+          "name": "DailyBackfillInfo",
+          "caption": "Start möglichst spät setzen, da Analyse für 'gestern' Daten aus 'heute' benötigt."
+        }
+      ]
+    }
+
+    {
       "type": "ValidationTextBox",
       "name": "ParamsJSON",
       "caption": "Parameter (JSON, optional – überschreibt Komfortfelder)",
