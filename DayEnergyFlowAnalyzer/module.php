@@ -1472,10 +1472,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .year { font-weight:600; }
 
             /* --- WebFront Popup Fix --- */
-            html, body {
+            /*html, body {
                 background: #fff !important;
                 color: #000 !important;
-            }
+            }*/
 
             .wp-jahresuebersicht,
             .wp-jahresuebersicht td,
