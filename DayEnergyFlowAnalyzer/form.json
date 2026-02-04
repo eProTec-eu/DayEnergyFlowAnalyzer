@@ -176,7 +176,7 @@
           "caption": "Start möglichst spät setzen, da Analyse für 'gestern' Daten aus 'heute' benötigt."
         }
       ]
-    }
+    },
 
     {
       "type": "ValidationTextBox",
