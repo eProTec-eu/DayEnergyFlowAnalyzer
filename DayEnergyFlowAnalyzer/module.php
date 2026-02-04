@@ -1311,7 +1311,16 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
             // Zeitraum: kompletter Ziel-Monatsbereich des Jahres
             $start = strtotime("first day of January $year 00:00:00");
-            $end   = strtotime("last day of December $year 23:59:59");
+            if ( date("y") != $year ) {
+                $end   = strtotime("last day of December $year 23:59:59");
+            }
+            else
+            {
+                $end   = strtotime("-2 day 23:59:59");
+            }
+            if ($start >= $end) {
+                return array_fill(1, 12, 0.0);
+            }
 
             // Aggregationstyp ermitteln: 1 = Zähler, 0 = Standard
             $isCounter = false;
