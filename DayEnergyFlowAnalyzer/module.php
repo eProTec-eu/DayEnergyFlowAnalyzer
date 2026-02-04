@@ -133,7 +133,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
     public function Analyze()
     {
         try {
-            $acID = $this->ReadPropertyInteger('ArchiveControlID');
+            $acID = $this->GetArchiveControlID();
             if ($acID <= 0 || !IPS_InstanceExists($acID)) {
                 throw new InvalidArgumentException('Bitte Archive Control auswählen.');
             }
@@ -536,7 +536,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
     public function GenerateDiagrams()
     {
-        $acID = $this->ReadPropertyInteger('ArchiveControlID');
+        $acID = $this->GetArchiveControlID();
         if ($acID <= 0 || !IPS_InstanceExists($acID)) {
             $this->SendDebug("GenerateDiagrams", "ArchiveControl fehlt/ungültig", 0);
             echo "[]";
@@ -1148,7 +1148,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $targets = $this->ensureBackfillTargets($catID);
 
         // Archive Control
-        $acID = $this->ReadPropertyInteger('ArchiveControlID'); if ($acID <= 0) throw new Exception('ArchiveControl fehlt.');
+        $acID = $this->GetArchiveControlID(); if ($acID <= 0) throw new Exception('ArchiveControl fehlt.');
 
         $written = 0;
         try {
@@ -1222,7 +1222,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             'COP_WP_DHW_Backfilled'     => ['name'=>'COP Warmwasser','agg'=>0]
         ];
 
-        $acID = $this->ReadPropertyInteger('ArchiveControlID');
+        $acID = $this->GetArchiveControlID();
         $out = [];
         foreach ($map as $ident=>$cfg) {
             $vid = @IPS_GetObjectIDByIdent($ident, $catID);
@@ -1311,16 +1311,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
             // Zeitraum: kompletter Ziel-Monatsbereich des Jahres
             $start = strtotime("first day of January $year 00:00:00");
-            if ( (int)date("Y") != $year ) {
-                $end   = strtotime("last day of December $year 23:59:59");
-            }
-            else
-            {
-                $end   = strtotime("-2 day 23:59:59");
-            }
-            if ($start >= $end) {
-                return array_fill(1, 12, 0.0);
-            }
+            $end   = strtotime("last day of December $year 23:59:59");
 
             // Aggregationstyp ermitteln: 1 = Zähler, 0 = Standard
             $isCounter = false;
@@ -1407,7 +1398,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
         $wpH  = getMonthly($ac, $id_wpH,    $YEAR);
         $wpW  = getMonthly($ac, $id_wpW,    $YEAR);
-        $wpG  = getMonthly($ac, $id_wpG,    $YEAR);
+        //$wpG  = getMonthly($ac, $id_wpG,    $YEAR);
+        $wpG  = array_map(fn($x, $y) => $x + $y, $wpH, $wpW);
 
         $pv   = getMonthly($ac, $id_pv,     $YEAR);
         $haus = getMonthly($ac, $id_haus,   $YEAR);
@@ -1836,4 +1828,14 @@ class DayEnergyFlowAnalyzer extends IPSModule
             '{{YEAR}}'      => (string)$year,
         ]);
     } 
+
+    private function GetArchiveControlID(): int
+    {
+        $list = IPS_GetInstanceListByModuleID('{43192F0A-135B-4CE7-A0A7-1475603F3060}');
+        if (count($list) === 0) {
+            throw new Exception('Keine Archive Control-Instanz gefunden.');
+        }
+        // Üblicherweise gibt es genau eine
+        return $list[0];
+    }
 }

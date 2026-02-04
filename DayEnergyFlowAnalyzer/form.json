@@ -1,11 +1,5 @@
 {
   "elements": [
-    {
-      "type": "SelectInstance",
-      "name": "ArchiveControlID",
-      "caption": "Archive Control (Archiv-Instanz)"
-    },
-
     { "type": "SelectVariable", "name": "VarPV",   "caption": "PV [kWh/Intervall oder Zähler]" },
     { "type": "CheckBox",       "name": "PVIsCounter",   "caption": "PV ist Zählerstand (kumuliert)" },
 
