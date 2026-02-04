@@ -1302,18 +1302,65 @@ class DayEnergyFlowAnalyzer extends IPSModule
             return (int)$list[0];
         }
 
-        function getMonthly($archiveId, int $varId, int $year): array {
-            if ($varId <= 0) { return array_fill(1, 12, 0.0); }
+        function getMonthly($archiveId, int $varId, int $year): array
+        {
+            // Ungültige ID → 12 Nullen
+            if ($varId <= 0) {
+                return array_fill(1, 12, 0.0);
+            }
+
+            // Zeitraum: kompletter Ziel-Monatsbereich des Jahres
             $start = strtotime("first day of January $year 00:00:00");
             $end   = strtotime("last day of December $year 23:59:59");
-            // Aggregationsstufe 3 = Monat
-            $agg   = AC_GetAggregatedValues($archiveId, $varId, 3, $start, $end, 0);
-            $out = array_fill(1, 12, 0.0);
-            foreach ($agg as $row) {
-                $m = (int)date('n', $row['TimeStamp']);
-                // Hinweis: Bei "Zähler"-Variablen ist 'Avg' die Monatssumme (Summe der positiven Deltas).
-                $out[$m] = (float)$row['Avg'];
+
+            // Aggregationstyp ermitteln: 1 = Zähler, 0 = Standard
+            $isCounter = false;
+            try {
+                // AC_GetAggregationType wirft bei alten Systemen / Rechten ggf. Fehler → daher try/catch
+                $isCounter = (function_exists('AC_GetAggregationType')
+                    && @AC_GetAggregationType($archiveId, $varId) === 1);
+            } catch (\Throwable $e) {
+                $isCounter = false; // konservativer Fallback
             }
+
+            // Monatsaggregation (Level 3)
+            $rows = @AC_GetAggregatedValues($archiveId, $varId, 3, $start, $end, 0);
+            if (!is_array($rows)) {
+                return array_fill(1, 12, 0.0);
+            }
+
+            // Ergebnis-Matrix initialisieren
+            $out = array_fill(1, 12, 0.0);
+
+            foreach ($rows as $row) {
+                // Sicherheitsprüfungen
+                if (!isset($row['TimeStamp'])) {
+                    continue;
+                }
+                $m = (int)date('n', (int)$row['TimeStamp']);
+                if ($m < 1 || $m > 12) {
+                    continue;
+                }
+
+                if ($isCounter) {
+                    // ZÄHLER: Monatssumme (Sum) bevorzugen; Fallback auf Avg, falls Sum nicht vorhanden
+                    if (array_key_exists('Sum', $row) && is_numeric($row['Sum'])) {
+                        $out[$m] = (float)$row['Sum'];
+                    } elseif (array_key_exists('Avg', $row) && is_numeric($row['Avg'])) {
+                        // Manche Installationen liefern bei Zählern nur Avg (Summe der Deltas)
+                        $out[$m] = (float)$row['Avg'];
+                    }
+                } else {
+                    // KEIN ZÄHLER: Durchschnittswert (Avg)
+                    if (array_key_exists('Avg', $row) && is_numeric($row['Avg'])) {
+                        $out[$m] = (float)$row['Avg'];
+                    } elseif (array_key_exists('Sum', $row) && is_numeric($row['Sum'])) {
+                        // Edge-Case: Falls Sum doch vorhanden ist, zur Sicherheit übernehmen
+                        $out[$m] = (float)$row['Sum'];
+                    }
+                }
+            }
+
             return $out;
         }
 
