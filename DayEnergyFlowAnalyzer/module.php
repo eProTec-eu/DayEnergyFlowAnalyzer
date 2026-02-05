@@ -253,7 +253,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $socRaw  = $varSOC ? $this->readHistorySOC($acID, $varSOC, $from, $to) : [];
             $heatRaw = $varHeat ? $this->readHistory($acID, $varHeat, $from, $to, $heatC) : [];
             $dhwRaw  = $varDHW ? $this->readHistory($acID, $varDHW , $from, $to, $dhwC ) : [];
-            $priceRaw = $varPrice ? $this->readHistory($acID, $varPrice, $from, $to, $priceC) : [];
+            $priceRaw = $varPrice ? $this->readStateWithInitial($acID, $varPrice, $from, $to) : [];
 
             // Resampling
             $pvR   = $this->resampleEnergyBuckets($pvRaw  , $grid);
@@ -927,6 +927,36 @@ class DayEnergyFlowAnalyzer extends IPSModule
         echo json_encode($urls);
     }
 
+    private function readStateWithInitial(int $acID, int $varID, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        // 1) Letzten bekannten Wert vor dem Fenster holen (limit=1).
+        //    Wir fragen bis exakt 'from' – IP-Symcon gibt dann den letzten Eintrag <= from zurück.
+        $init = @AC_GetLoggedValues($acID, $varID, 0, $from->getTimestamp(), 1);
+        $vals = [];
+
+        if (is_array($init) && count($init) > 0) {
+            $r = $init[0];
+            // „Ankerpunkt“ exakt am Fensterrand setzen, damit LOCF sauber startet.
+            $vals[] = [ (int)$from->getTimestamp(), (float)$r['Value'] ];
+        }
+
+        // 2) Alle Zustandsänderungen im Fenster lesen (limit=0 → alle)
+        $raw = @AC_GetLoggedValues($acID, $varID, $from->getTimestamp(), $to->getTimestamp(), 0);
+        foreach ((array)$raw as $r) {
+            $vals[] = [ (int)$r['TimeStamp'], (float)$r['Value'] ];
+        }
+
+        // 3) Zeitlich sortieren & doppelte Zeitstempel bereinigen (letzter gewinnt)
+        usort($vals, fn($a, $b) => $a[0] <=> $b[0]);
+        $dedup = [];
+        foreach ($vals as $p) { $dedup[$p[0]] = $p[1]; }
+
+        // 4) Zurück in [ [ts,val], ... ] umwandeln
+        $out = [];
+        foreach ($dedup as $ts => $v) { $out[] = [ $ts, $v ]; }
+        return $out;
+    }
+    
     private function getHost()
     {
         $ifaces = Sys_GetNetworkInfo();
