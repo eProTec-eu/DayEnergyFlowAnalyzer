@@ -242,7 +242,7 @@
     {
       "type": "Button",
       "caption": "Analyse jetzt",
-      "onClick": "'DEFA_Analyze($id);"
+      "onClick": "DEFA_Analyze($id);"
     },
     {
       "type": "Button",
