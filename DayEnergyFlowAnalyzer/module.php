@@ -560,61 +560,58 @@ class DayEnergyFlowAnalyzer extends IPSModule
     public function ExportDashboardPDF()
     {
         try {
-            $host = $this->getHost(); // liefert z.B. 127.0.0.1
-            $kernelDir = IPS_GetKernelDir();               // z. B. /var/lib/symcon/
-            $baseDir   = $kernelDir . 'user/';             // …/user/
-            $tempDir   = $baseDir  . 'temp/';              // …/user/temp/
-            if (!is_dir($tempDir)) { @mkdir($tempDir, 0775, true); }
+            $host     = $this->getHost();
+            $kernel   = IPS_GetKernelDir();
+            $baseDir  = $kernel . "user/";
+            $tempDir  = $baseDir . "temp/";
 
-            // 1) HTML-Datei (PHP) frisch erzeugen/schreiben
-            $html = $this->buildDefaDashboardPhp($this->InstanceID);
-            $htmlFile = $baseDir . 'defa_dashboard.php';
-            if (@file_put_contents($htmlFile, $html, LOCK_EX) === false) {
-                throw new \RuntimeException("Dashboard-HTML konnte nicht geschrieben werden: {$htmlFile}");
+            if (!is_dir($tempDir)) {
+                @mkdir($tempDir, 0777, true);
             }
-            @chmod($htmlFile, 0664);
 
-            // 2) PDF-Dateipfad
-            $pdfFile = $tempDir . 'dashboard_' . time() . '.pdf';
+            // 1) Dashboard HTML immer neu schreiben
+            $html = $this->buildDefaDashboardPhp($this->InstanceID);
+            $htmlFile = $baseDir . "defa_dashboard.php";
+            @file_put_contents($htmlFile, $html);
+
+            // 2) Ziel-PDF
+            $pdfFile = $tempDir . "dashboard_" . time() . ".pdf";
 
             // 3) wkhtmltopdf finden
-            $wkhtml = trim(@shell_exec('which wkhtmltopdf 2>/dev/null') ?? '');
-            if ($wkhtml === '' || !is_file($wkhtml)) {
-                throw new \RuntimeException("wkhtmltopdf nicht gefunden (PATH?).");
+            $wkhtml = trim(@shell_exec("which wkhtmltopdf 2>/dev/null"));
+            if ($wkhtml === "") {
+                echo "about:blank";
+                return;
             }
 
-            // 4) Quelle: HTTP über den Symcon-Webserver (PHP wird serverseitig ausgeführt!)
-            $srcHttpUrl = "http://{$host}:3777/user/defa_dashboard.php";
+            // 4) Quelle: HTTP (PHP wird hier korrekt ausgeführt)
+            $url = "http://{$host}:3777/user/defa_dashboard.php";
 
-            // Optional: Wenn dein Dashboard Parameter benötigt, hier anfügen:
-            // $srcHttpUrl .= '?year=' . urlencode(date('Y'));
+            // 5) Command:
+            // stderr → Datei, NICHT an Symcon zurückleiten!
+            $stderrLog = $tempDir . "wkhtml_err_" . time() . ".log";
 
-            // 5) wkhtmltopdf mit sinnvollen Flags
-            $args = [
-                '--load-error-handling', 'ignore',      // kleinere 404/Asset-Fehler ignorieren
-                '--javascript-delay', '0',              // kein JS-Delay nötig (rein statische Seite)
-                '--print-media-type',
-                '--encoding', 'utf-8'
-            ];
+            $cmd = escapeshellcmd($wkhtml)
+                . " --load-error-handling ignore"
+                . " --disable-smart-shrinking"
+                . " --encoding utf-8"
+                . " " . escapeshellarg($url)
+                . " " . escapeshellarg($pdfFile)
+                . " 2> " . escapeshellarg($stderrLog);
 
-            $cmd = escapeshellcmd($wkhtml) . ' '
-                . implode(' ', array_map('escapeshellarg', $args)) . ' '
-                . escapeshellarg($srcHttpUrl) . ' ' . escapeshellarg($pdfFile) . ' 2>&1';
+            // 6) Kommando ausführen ohne Rückkanal-Müll
+            @exec($cmd);
 
-            $out = [];
-            $rc  = 0;
-            @exec($cmd, $out, $rc);
-
-            $this->SendDebug("ExportDashboardPDF", "CMD: {$cmd}", 0);
-            $this->SendDebug("ExportDashboardPDF", "RC={$rc}\nOUT:\n".implode("\n", $out), 0);
-
-            if ($rc !== 0 || !file_exists($pdfFile) || filesize($pdfFile) === 0) {
-                throw new \RuntimeException("wkhtmltopdf Fehler (RC={$rc}). Siehe Debug-Log für Details.");
+            // 7) PDF erfolgreich?
+            if (file_exists($pdfFile) && filesize($pdfFile) > 0) {
+                echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+                return;
             }
 
-            echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
-        } catch (\Throwable $e) {
-            $this->SendDebug("ExportDashboardPDF", "Fehler: ".$e->getMessage(), 0);
+            // Fallback
+            echo "about:blank";
+
+        } catch (Throwable $e) {
             echo "about:blank";
         }
     }
