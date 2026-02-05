@@ -113,6 +113,20 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterPropertyInteger('Dash_GridBuy', 0);
         $this->RegisterPropertyInteger('Dash_HeaterHours', 0);
         $this->RegisterPropertyInteger('Dash_DHWHours', 0);
+
+
+        // Strompreis-Zeitreihe (Spotpreis, Ereigniswerte)
+        $this->RegisterPropertyInteger('VarPrice', 0); // ct/kWh
+        $this->RegisterPropertyBoolean('PriceIsCounter', false); // i. d. R. false (kein Zähler)
+
+        // Dashboard: Monatsanzeige WP-Kosten
+        $this->RegisterPropertyInteger('Dash_WP_Cost', 0);
+
+        // Ergebnisvariablen (Tageswerte in €)
+        $this->RegisterVariableFloat('HP_Cost_Real_EUR', 'WP-Kosten mit WP [€]');
+        $this->RegisterVariableFloat('HP_Cost_NoWP_EUR', 'WP-Kosten ohne WP [€]');
+        $this->RegisterVariableFloat('HP_Cost_Change_EUR', 'Netto-Kostenänderung [€]');
+
     }
 
     public function ApplyChanges()
@@ -160,6 +174,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $varExp  = $this->ReadPropertyInteger('VarExport');
             $expC    = $this->ReadPropertyBoolean('ExportIsCounter');
             $varSOC  = $this->ReadPropertyInteger('VarSOC');
+
+            $varPrice = $this->ReadPropertyInteger('VarPrice');
 
             // Wärmemenge Heizen/WW
             $varHeat = $this->ReadPropertyInteger('VarHeatEnergy');
@@ -236,7 +252,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $expRaw  = $varExp ? $this->readHistory($acID, $varExp, $from, $to, $expC) : [];
             $socRaw  = $varSOC ? $this->readHistorySOC($acID, $varSOC, $from, $to) : [];
             $heatRaw = $varHeat ? $this->readHistory($acID, $varHeat, $from, $to, $heatC) : [];
-            $dhwRaw  = $varDHW  ? $this->readHistory($acID, $varDHW , $from, $to, $dhwC ) : [];
+            $dhwRaw  = $varDHW ? $this->readHistory($acID, $varDHW , $from, $to, $dhwC ) : [];
+            $priceRaw = $varPrice ? $this->readHistory($acID, $varPrice, $from, $to, $priceC) : [];
 
             // Resampling
             $pvR   = $this->resampleEnergyBuckets($pvRaw  , $grid);
@@ -247,6 +264,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $heatR = $this->resampleEnergyBuckets($heatRaw, $grid);
             $dhwR  = $this->resampleEnergyBuckets($dhwRaw , $grid);
             $socR  = $varSOC ? $this->resampleStateToGrid($socRaw, $grid) : array_fill(0, count($grid), null);
+            $priceR   = $this->resampleStateToGrid($priceRaw, $grid);
 
             // Komfort + JSON Params
             $params = [
@@ -279,7 +297,9 @@ class DayEnergyFlowAnalyzer extends IPSModule
                     'hp' => $hpR[$i],
                     'import' => $impR[$i],
                     'export' => $expR[$i],
-                    'soc' => $socR[$i]===null? null : (float)$socR[$i]
+                    'soc' => $socR[$i]===null? null : (float)$socR[$i],
+                    // Preis von ct/kWh auf €/kWh normalisieren (Null bei fehlenden Werten)
+                    'price_eur' => is_numeric($priceR[$i]) ? ((float)$priceR[$i] / 100.0) : 0.0
                 ];
             }
 
@@ -345,6 +365,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
             SetValueFloat($this->GetIDForIdent('COP_WP_Total'), $cop_total);
             SetValueFloat($this->GetIDForIdent('COP_WP_Heating'), $cop_heat);
             SetValueFloat($this->GetIDForIdent('COP_WP_DHW'), $cop_dhw);
+            //===Kosten
+            SetValueFloat($this->GetIDForIdent('HP_Cost_Real_EUR'),   (float)$result['hp_cost_real_eur']);
+            SetValueFloat($this->GetIDForIdent('HP_Cost_NoWP_EUR'),   (float)$result['hp_cost_no_wp_eur']);
+            SetValueFloat($this->GetIDForIdent('HP_Cost_Change_EUR'), (float)$result['hp_cost_change_eur']);            
         }
         catch (\Throwable $e) {
             $this->SendDebug('Analyze/Error', $e->getMessage(), 0);
@@ -1025,6 +1049,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
         $importRealCore=0.0; foreach ($coreIdx as $i){ $imp=max(0.0,(float)($rows[$i]['import']??0.0)); if($imp<$epsImp)$imp=0.0; $importRealCore+=$imp; }
 
+        // === KOSTEN: Akkumulatoren (€/Tag)
+        $hpCostReal = 0.0; // echte WP-Kosten des Zieltags
+        $hpCostNoWP = 0.0; // Gegenszenario ohne WP (0 €)
+
         foreach ($rows as $i=>$r) {
             $E=max(0.0,(float)($r['pv']??0.0));
             $L=max(0.0,(float)($r['load']??0.0));
@@ -1057,10 +1085,20 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $ts=$this->ts_from_any($r['t'],$tz); $inCore=($ts >= $dayStartTs && $ts <= $dayEndTs);
             if ($inCore) {
                 $hpSum += $HP; $pvToHP_direct += $pvToHP; $batPVToHP_AC += $pvPartFromBatToHP_DC*$etaD; $hoursCore += $h;
+        
+                // === KOSTEN: Intervallkosten = HP_kWh * Preis_EUR/kWh
+                $price_eur = max(0.0, (float)($r['price_eur'] ?? 0.0));
+                $cost_iv   = $HP * $price_eur;
+                $hpCostReal += $cost_iv;
+
                 if ($returnDet) {
                     $details[] = [ 't'=>$r['t'],'dt_h'=>round($h,6), 'pv_kwh'=>round($E,6),'load_kwh'=>round($L,6),'hp_kwh'=>round($HP,6),
                                    'pv_to_wp_direct_kwh'=>round($pvToHP,6),'bat_to_wp_kwh'=>round($batToHP,6),'bat_pv_to_wp_kwh'=>round($pvPartFromBatToHP_DC*$etaD,6),
-                                   'soc_sim_percent'=>round(100.0*$batE/$capKWh,3) ];
+                                   'soc_sim_percent'=>round(100.0*$batE/$capKWh,3),
+                                   // === KOSTEN Details:
+                                    'price_eur_per_kwh' => round($price_eur,6),
+                                    'hp_cost_eur' => round($cost_iv,6)
+                    ];
                 }
             }
         }
@@ -1078,7 +1116,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $dischargeKWh=min($deficit,$availableDischKWh); $batE-=$dischargeKWh/$etaD; $gridImpNoHP=max(0.0,$deficit-$dischargeKWh); if($gridImpNoHP<$epsImp)$gridImpNoHP=0.0;
             $soc2=100.0*$batE/$capKWh; $ts=$this->ts_from_any($r['t'],$tz); $inCore=($ts >= $dayStartTs && $ts <= $dayEndTs);
             if ($inCore) {
-                $importNoHPCore += $gridImpNoHP; $delta = $Imp - $gridImpNoHP; if ($delta>0)$increaseCore+=$delta; elseif($delta<0)$avoidedCore+=-$delta;
+                $importNoHPCore += $gridImpNoHP;                 
+                // === KOSTEN (ohne WP): 0 €, WP läuft nicht.
+                $hpCostNoWP += 0.0;
+
+                $delta = $Imp - $gridImpNoHP; 
+                if ($delta>0)$increaseCore+=$delta; elseif($delta<0)$avoidedCore+=-$delta;
                 if ($returnDet) { $idx=$this->safeIndex($details,$i); $details[$idx]['import_real_kwh']=round($Imp,6); $details[$idx]['import_no_wp_kwh']=round($gridImpNoHP,6); $details[$idx]['delta_import_kwh']=round($delta,6); }
             }
         }
@@ -1093,6 +1136,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
                  'wp_import_increase_brutto_share_pct'=>$share($increaseCore,$hpSum), 'wp_import_avoided_brutto_share_pct'=>$share($avoidedCore,$hpSum),
                  'wp_import_change_signed_kwh'=>round($net_grid_effect,3), 'wp_import_increase_netto_kwh'=>round($wp_net_inc,3), 'wp_import_reduction_netto_kwh'=>round($wp_net_red,3),
                  'wp_import_increase_netto_share_pct'=>$share($wp_net_inc,$hpSum), 'wp_import_reduction_netto_share_pct'=>$share($wp_net_red,$hpSum),
+                 
+                 // === KOSTEN (€/Tag)
+                 'hp_cost_real_eur'   => round($hpCostReal, 3),
+                 'hp_cost_no_wp_eur'  => round($hpCostNoWP, 3),
+                 'hp_cost_change_eur' => round($hpCostReal - $hpCostNoWP, 3),
+
                  'grid_increase_by_wp_kwh'=>round($increaseCore,3), 'grid_avoided_by_wp_kwh'=>round($avoidedCore,3), 'net_grid_effect_kwh'=>round($net_grid_effect,3),
                  'details'=>$returnDet? $details : null ];
     }
@@ -1140,7 +1189,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
             'net' => $this->GetIDForIdent('WP_import_change_signed_kWh'),
             'copT'=> $this->GetIDForIdent('COP_WP_Total'),
             'copH'=> $this->GetIDForIdent('COP_WP_Heating'),
-            'copW'=> $this->GetIDForIdent('COP_WP_DHW')
+            'copW'=> $this->GetIDForIdent('COP_WP_DHW'),
+            //===Kosten
+            'costR' => $this->GetIDForIdent('HP_Cost_Real_EUR'),
+            'costN' => $this->GetIDForIdent('HP_Cost_NoWP_EUR'),
+            'costC' => $this->GetIDForIdent('HP_Cost_Change_EUR')
         ];
         foreach ($mv as $k=>$vid) if ($vid <= 0) throw new Exception("Modul-Variable fehlt: $k");
 
@@ -1180,6 +1233,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $impR = (float)GetValueFloat($mv['impR']);
                 $impN = (float)GetValueFloat($mv['impN']);
                 $net  = (float)GetValueFloat($mv['net']);
+                //===Kosten                
+                $costR = (float)GetValueFloat($mv['costR']);
+                $costN = (float)GetValueFloat($mv['costN']);
+                $costC = (float)GetValueFloat($mv['costC']);
 
                 // COP aus Modulvariablen holen
                 $copT = (float)GetValueFloat($mv['copT']);
@@ -1197,6 +1254,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $written += $this->writeEventDay($acID, $targets['COP_WP_Total_Backfilled'],   $ymd, $copT, $dryRun);
                 $written += $this->writeEventDay($acID, $targets['COP_WP_Heating_Backfilled'], $ymd, $copH, $dryRun);
                 $written += $this->writeEventDay($acID, $targets['COP_WP_DHW_Backfilled'],     $ymd, $copW, $dryRun);
+
+                //===Kosten                
+                $written += $this->writeCounterDay($acID, $targets['HP_Cost_Real_EUR_Backfilled'],   $ymd, $costR, $dryRun);
+                $written += $this->writeCounterDay($acID, $targets['HP_Cost_NoWP_EUR_Backfilled'],   $ymd, $costN, $dryRun);
+                $written += $this->writeCounterDay($acID, $targets['HP_Cost_Change_EUR_Backfilled'], $ymd, $costC, $dryRun);
             }
 
             // Reaggregate aller Zielvariablen
@@ -1219,7 +1281,12 @@ class DayEnergyFlowAnalyzer extends IPSModule
             // NEU: COP als Ereignisse
             'COP_WP_Total_Backfilled'   => ['name'=>'COP Gesamt','agg'=>0],
             'COP_WP_Heating_Backfilled' => ['name'=>'COP Heizen','agg'=>0],
-            'COP_WP_DHW_Backfilled'     => ['name'=>'COP Warmwasser','agg'=>0]
+            'COP_WP_DHW_Backfilled'     => ['name'=>'COP Warmwasser','agg'=>0],
+
+            //===Kosten
+            'HP_Cost_Real_EUR_Backfilled'   => ['name'=>'WP-Kosten mit WP [€]','agg'=>1],
+            'HP_Cost_NoWP_EUR_Backfilled'   => ['name'=>'WP-Kosten ohne WP [€]','agg'=>1],
+            'HP_Cost_Change_EUR_Backfilled' => ['name'=>'WP-Kosten-Differenz [€]','agg'=>1]
         ];
 
         $acID = $this->GetArchiveControlID();
@@ -1388,6 +1455,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $id_hh     = (int)IPS_GetProperty($MODULE_ID, 'Dash_HeaterHours');   // Betriebsstunden Heizen
         $id_wh     = (int)IPS_GetProperty($MODULE_ID, 'Dash_DHWHours');      // Betriebsstunden WW
 
+        $id_cost = (int)IPS_GetProperty($MODULE_ID, 'Dash_WP_Cost'); // WP-Kosten [€] (Backfill-Zähler)
+
         // -------------------------------------------
         // Daten laden (Monatsaggregation)
         // -------------------------------------------
@@ -1411,11 +1480,14 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $stdH = getMonthly($ac, $id_hh,     $YEAR);
         $stdW = getMonthly($ac, $id_wh,     $YEAR);
 
+        $cost = getMonthly($ac, $id_cost, $YEAR);
+
         // Summen vorbereiten
         $S = [
         'wmzH'=>0.0,'wmzW'=>0.0,'wpH'=>0.0,'wpW'=>0.0,'wpG'=>0.0,
         'pv'=>0.0,'haus'=>0.0,'netT'=>0.0,'netW'=>0.0,
-        'stdH'=>0.0,'stdW'=>0.0
+        'stdH'=>0.0,'stdW'=>0.0,
+        'cost'=>0.0 // NEU
         ];
 
         // ------------------------------
@@ -1433,7 +1505,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 'Wärme Heizen (kWh)','Wärme WW (kWh)',
                 'WP Strom Heizen (kWh)','WP Strom WW (kWh)','WP Strom Gesamt (kWh)',
                 'COP Gesamt','COP Heizen','COP WW',
-                'PV (kWh)','Haus (kWh)','Netz gesamt (kWh)','Netz (WP) (kWh)',
+                'PV (kWh)','Haus (kWh)','Netz gesamt (kWh)','Netz (WP) (kWh)','WP-Kosten (€)',
                 'Betriebsstunden Heizen','Betriebsstunden WW'
             ];
             echo implode(';', $header) . "\r\n";
@@ -1454,11 +1526,14 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $hH    = (float)$stdH[$m];
                 $wHrs  = (float)$stdW[$m];
 
+                $costM = (float)$cost[$m];
+                
                 // Summen
                 $S['wmzH']+=$wH; $S['wmzW']+=$wW;
                 $S['wpH'] +=$eH; $S['wpW'] +=$eW; $S['wpG']+=$eG;
                 $S['pv']  +=$pvM; $S['haus']+=$hausM; $S['netT']+=$netTM; $S['netW']+=$netWM;
                 $S['stdH']+=$hH;  $S['stdW']+=$wHrs;
+                $S['cost'] += $costM;
 
                 // Monatsname (lokalisiert)
                 $date      = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $YEAR, $m));
@@ -1469,7 +1544,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                     f1($wH), f1($wW),
                     f1($eH), f1($eW), f1($eG),
                     f2($copT), f2($copH), f2($copW),
-                    f1($pvM), f1($hausM), f1($netTM), f1($netWM),
+                    f1($pvM), f1($hausM), f1($netTM), f1($netWM), f2($costM),
                     f1($hH), f1($wHrs)
                 ];
                 echo implode(';', $row) . "\r\n";
@@ -1488,7 +1563,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 f1($S['wmzH']), f1($S['wmzW']),
                 f1($S['wpH']), f1($S['wpW']), f1($S['wpG']),
                 f2($copT_sum), f2($copH_sum), f2($copW_sum),
-                f1($S['pv']), f1($S['haus']), f1($S['netT']), f1($S['netW']),
+                f1($S['pv']), f1($S['haus']), f1($S['netT']), f1($S['netW']), f2($S['cost']),
                 f1($S['stdH']), f1($S['stdW'])
             ];
             echo implode(';', $footer) . "\r\n";
@@ -1661,7 +1736,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht thead tr:first-child th:nth-child(2),
             .wp-jahresuebersicht thead tr:first-child th:nth-child(3),
             .wp-jahresuebersicht thead tr:first-child th:nth-child(4),
-            .wp-jahresuebersicht thead tr:first-child th:nth-child(5) {
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(5),
+            .wp-jahresuebersicht thead tr:first-child th:nth-child(6) { /* NEU */
             box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color-head);
             }
 
@@ -1671,7 +1747,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht thead tr:last-child th:nth-child(3),
             .wp-jahresuebersicht thead tr:last-child th:nth-child(6),
             .wp-jahresuebersicht thead tr:last-child th:nth-child(9),
-            .wp-jahresuebersicht thead tr:last-child th:nth-child(13) {
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(13),
+            .wp-jahresuebersicht thead tr:last-child th:nth-child(14) { /* NEU */
             box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color);
             }
 
@@ -1683,11 +1760,13 @@ class DayEnergyFlowAnalyzer extends IPSModule
             .wp-jahresuebersicht tbody td:nth-child(6),
             .wp-jahresuebersicht tbody td:nth-child(9),
             .wp-jahresuebersicht tbody td:nth-child(13),
+            .wp-jahresuebersicht tbody td:nth-child(14),
             .wp-jahresuebersicht tfoot td:nth-child(1),
             .wp-jahresuebersicht tfoot td:nth-child(3),
             .wp-jahresuebersicht tfoot td:nth-child(6),
             .wp-jahresuebersicht tfoot td:nth-child(9),
-            .wp-jahresuebersicht tfoot td:nth-child(13) {
+            .wp-jahresuebersicht tfoot td:nth-child(13),
+            .wp-jahresuebersicht tfoot td:nth-child(14) { /* NEU */
             box-shadow: inset calc(-1 * var(--sep-w)) 0 0 0 var(--sep-color);
             }
 
@@ -1716,6 +1795,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <th scope="col" colspan="3">WP&nbsp;Strom (kWh)</th>
                 <th scope="col" colspan="3">COP</th>
                 <th scope="col" colspan="4">Energie (kWh)</th>
+                <th scope="col" colspan="1">Kosten (€)</th>
                 <th scope="col" colspan="2">Betriebsstunden</th>
             </tr>
             <tr>
@@ -1724,6 +1804,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <th>Heizen</th><th>WW</th><th>Gesamt</th>
                 <th>Gesamt</th><th>Heizen</th><th>WW</th>
                 <th>PV</th><th>Haus</th><th>Netz gesamt</th><th>Netz (WP)</th>
+                <th>WP‑Kosten (€)</th>
                 <th>Heizen</th><th>WW</th>
             </tr>
             </thead>
@@ -1743,6 +1824,8 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $netTM = (float)$netT[$m];
                 $netWM = (float)$netW[$m];
 
+                $costM = (float)$cost[$m];
+
                 $hH    = (float)$stdH[$m];
                 $wHrs  = (float)$stdW[$m];
 
@@ -1750,6 +1833,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 $S['wmzH']+=$wH; $S['wmzW']+=$wW;
                 $S['wpH'] +=$eH; $S['wpW'] +=$eW; $S['wpG']+=$eG;
                 $S['pv']  +=$pvM; $S['haus']+=$hausM; $S['netT']+=$netTM; $S['netW']+=$netWM;
+                $S['cost'] += $costM;
                 $S['stdH']+=$hH;  $S['stdW']+=$wHrs;
 
                 $date      = DateTimeImmutable::createFromFormat('Y-n-j', sprintf('%d-%d-1', $YEAR, $m));
@@ -1771,6 +1855,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <td class="num"><?=f1($hausM)?></td>
                 <td class="num"><?=f1($netTM)?></td>
                 <td class="num"><?=f1($netWM)?></td>
+                <td class="num"><?=f2($costM)?></td>
                 <td class="num"><?=f1($hH)?></td>
                 <td class="num"><?=f1($wHrs)?></td>
             </tr>
@@ -1800,6 +1885,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <td class="num"><?=f1($S['haus'])?></td>
                 <td class="num"><?=f1($S['netT'])?></td>
                 <td class="num"><?=f1($S['netW'])?></td>
+                <td class="num"><?=f2($S['cost'])?></td>
                 <td class="num"><?=f1($S['stdH'])?></td>
                 <td class="num"><?=f1($S['stdW'])?></td>
             </tr>

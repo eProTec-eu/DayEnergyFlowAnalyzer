@@ -48,6 +48,8 @@
 
     { "type": "SelectVariable", "name": "VarSOC", "caption": "Batterie-SoC [% , optional]" },
 
+    { "type": "SelectVariable", "name": "VarPrice", "caption": "Strompreis [ct/kWh , optional]" },
+
     {
       "type": "NumberSpinner",
       "name": "StepMinutes",
