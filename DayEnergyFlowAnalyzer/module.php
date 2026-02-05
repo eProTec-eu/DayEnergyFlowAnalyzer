@@ -1890,7 +1890,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
                 <td class="num"><?=f1($S['stdW'])?></td>
             </tr>
             <tr>
-                <td colspan="15" class="summary">
+                <td colspan="16" class="summary">
                 <strong>Jahres‑COP (WP gesamt):</strong> <?=f2($copT_sum)?>
                 &nbsp;|&nbsp;
                 <strong>Autarkie (WP):</strong> <?=number_format($autWP*100, 1, ',', '.') ?>&nbsp;%

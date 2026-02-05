@@ -3,8 +3,8 @@
   "author": "Matthias Fenske",
   "name": "Day Energy Flow Analyzer",
   "url": "https://github.com/eProTec-eu/DayEnergyFlowAnalyzer.git",
-  "version": "1.9.0",
-  "build": 72,
+  "version": "1.9.1",
+  "build": 73,
   "date": 20260205,
   "compatibility": {
     "version": "7.0"
