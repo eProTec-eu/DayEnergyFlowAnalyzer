@@ -521,7 +521,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         return $url;
     }
 
-    public function ExportDashboardPDF()
+/*    public function ExportDashboardPDF()
     {
         $host = $this->getHost();
         $url  = "http://{$host}:3777/user/defa_dashboard.php";
@@ -556,7 +556,105 @@ class DayEnergyFlowAnalyzer extends IPSModule
         IPS_RunScriptText($python);
 
         echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+    }*/
+    public function ExportDashboardPDF()
+    {
+        try {
+            // 1) Host & Pfade
+            $host = $this->getHost(); // 127.0.0.1 Fallback enthalten
+            $kernelDir = IPS_GetKernelDir();               // .../ (mit Slash)
+            $baseDir   = $kernelDir . 'user/';             // .../user/
+            $tempDir   = $baseDir  . 'temp/';              // .../user/temp/
+            if (!is_dir($tempDir)) { @mkdir($tempDir, 0775, true); }
+
+            // 2) Dashboard-HTML (neu) erzeugen & als Datei schreiben
+            //    --> direkte Nutzung der bestehenden Engine
+            $year = (int)date('Y');
+            $html = $this->buildDefaDashboardPhp($this->InstanceID);
+            $htmlFile = $baseDir . 'defa_dashboard.php';
+            @file_put_contents($htmlFile, $html, LOCK_EX);
+            @chmod($htmlFile, 0664);
+
+            // 3) Lokale URL & file://-Pfad
+            $fileUrl  = 'file://' . $htmlFile; // für Renderer
+            $webUrl   = "http://{$host}:3777/user/defa_dashboard.php"; // nur Info/Hinweis
+            $pdfFile  = $tempDir . 'dashboard_' . time() . '.pdf';
+
+            // 4) Bevorzugt: wkhtmltopdf
+            $wkhtml = trim(@shell_exec('which wkhtmltopdf 2>/dev/null') ?? '');
+            if ($wkhtml !== '') {
+                // --enable-local-file-access wichtig für file://
+                $cmd = escapeshellcmd($wkhtml) . ' --enable-local-file-access '
+                    . escapeshellarg($fileUrl) . ' ' . escapeshellarg($pdfFile) . ' 2>&1';
+                $out = [];
+                $rc  = 0;
+                @exec($cmd, $out, $rc);
+                if ($rc === 0 && file_exists($pdfFile) && filesize($pdfFile) > 0) {
+                    echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+                    return;
+                }
+            }
+
+            // 5) Fallback: Headless Chrome / Chromium
+            $chrome = '';
+            foreach (['google-chrome', 'chromium', 'chromium-browser'] as $bin) {
+                $p = trim(@shell_exec("which {$bin} 2>/dev/null") ?? '');
+                if ($p !== '') { $chrome = $p; break; }
+            }
+            if ($chrome !== '') {
+                $cmd = escapeshellcmd($chrome)
+                    . ' --headless --disable-gpu --no-sandbox '
+                    . ' --print-to-pdf=' . escapeshellarg($pdfFile) . ' '
+                    . escapeshellarg($fileUrl) . ' 2>&1';
+                $out = [];
+                $rc  = 0;
+                @exec($cmd, $out, $rc);
+                if (file_exists($pdfFile) && filesize($pdfFile) > 0) {
+                    echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+                    return;
+                }
+            }
+
+            // 6) Letzter Fallback: „Plain-Text“-PDF (ohne HTML-Rendering)
+            //    -> Erzeugt ein simples PDF mit dem HTML-Text (besser als gar nichts).
+            //    Wichtig: keinerlei Python hier – IP-Symcon führt PHP aus.
+            $plain = "Dashboard-HTML konnte nicht gerendert werden.\n\n"
+                . "Bitte installiere 'wkhtmltopdf' oder 'chromium' auf dem System.\n\n"
+                . "Als Fallback folgt der HTML-Quelltext:\n\n"
+                . strip_tags($html); // etwas entschärft, damit es lesbar bleibt
+
+            $pdf = "%PDF-1.4\n";
+            // Minimal-PDF (eine Seite), ganz grob: wir schreiben Text in ein Objekt.
+            // Für Produktionszwecke ist ein echter Renderer empfehlenswert.
+            $txt = str_replace(["\\", "(", ")"], ["\\\\", "\\(", "\\)"], $plain);
+            $stream = "BT /F1 10 Tf 50 780 Td (" . implode(") Tj T* (", explode("\n", $txt)) . ") Tj ET";
+            $len = strlen($stream);
+
+            // PDF-Objekte
+            $objs = [];
+            $objs[] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
+            $objs[] = "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n";
+            $objs[] = "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n";
+            $objs[] = "4 0 obj << /Length {$len} >> stream\n{$stream}\nendstream endobj\n";
+            $objs[] = "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n";
+
+            // Cross-Reference Table
+            $offsets = [];
+            $pos = strlen($pdf);
+            foreach ($objs as $o) { $offsets[] = $pos; $pdf .= $o; $pos = strlen($pdf); }
+            $xref = "xref\n0 " . (count($objs)+1) . "\n0000000000 65535 f \n";
+            foreach ($offsets as $off) { $xref .= sprintf("%010d 00000 n \n", $off); }
+            $trailer = "trailer << /Size " . (count($objs)+1) . " /Root 1 0 R >>\nstartxref\n{$pos}\n%%EOF";
+            $pdf .= $xref . $trailer;
+
+            @file_put_contents($pdfFile, $pdf);
+            echo "http://{$host}:3777/user/temp/" . basename($pdfFile);
+        } catch (\Throwable $e) {
+            $this->SendDebug("ExportDashboardPDF", "Fehler: ".$e->getMessage(), 0);
+            echo "about:blank";
+        }
     }
+   
 
     public function GenerateDiagrams()
     {
@@ -956,7 +1054,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         foreach ($dedup as $ts => $v) { $out[] = [ $ts, $v ]; }
         return $out;
     }
-    
+
     private function getHost()
     {
         $ifaces = Sys_GetNetworkInfo();
