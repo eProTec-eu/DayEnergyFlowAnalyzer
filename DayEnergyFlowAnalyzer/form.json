@@ -141,6 +141,8 @@
         { "type": "SelectVariable", "caption": "Hausverbrauch", "name": "Dash_Consumption" },
         { "type": "SelectVariable", "caption": "Netzbezug",     "name": "Dash_GridBuy" },
 
+        { "type": "SelectVariable", "caption": "WP Kosten",     "name": "Dash_WP_Cost" },
+
         { "type": "SelectVariable", "caption": "Betriebsstunden Heizen",      "name": "Dash_HeaterHours" },
         { "type": "SelectVariable", "caption": "Betriebsstunden Warmwasser",  "name": "Dash_DHWHours" }
       ]
