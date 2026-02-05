@@ -592,9 +592,13 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $stderrLog = $tempDir . "wkhtml_err_" . time() . ".log";
 
             $cmd = escapeshellcmd($wkhtml)
-                . " --load-error-handling ignore"
-                . " --disable-smart-shrinking"
+                . " --orientation Landscape"
+                . " --page-size A4"
+                . " --margin-top 10mm --margin-right 8mm --margin-bottom 12mm --margin-left 8mm"
+                . " --print-media-type"
                 . " --encoding utf-8"
+                . " --disable-smart-shrinking"
+                . " --load-error-handling ignore"
                 . " " . escapeshellarg($url)
                 . " " . escapeshellarg($pdfFile)
                 . " 2> " . escapeshellarg($stderrLog);
