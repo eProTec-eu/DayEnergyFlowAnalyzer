@@ -40,6 +40,10 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
         $this->RegisterPropertyInteger('VarSOC', 0);
 
+        // Strompreis-Zeitreihe (Spotpreis, Ereigniswerte)
+        $this->RegisterPropertyInteger('VarPrice', 0); // ct/kWh
+        $this->RegisterPropertyBoolean('PriceIsCounter', false); // i. d. R. false (kein Zähler)        
+
         // Wärmemengenzähler (Heizen & WW)
         $this->RegisterPropertyInteger('VarHeatEnergy', 0);
         $this->RegisterPropertyBoolean('HeatEnergyIsCounter', false);
@@ -113,11 +117,6 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterPropertyInteger('Dash_GridBuy', 0);
         $this->RegisterPropertyInteger('Dash_HeaterHours', 0);
         $this->RegisterPropertyInteger('Dash_DHWHours', 0);
-
-
-        // Strompreis-Zeitreihe (Spotpreis, Ereigniswerte)
-        $this->RegisterPropertyInteger('VarPrice', 0); // ct/kWh
-        $this->RegisterPropertyBoolean('PriceIsCounter', false); // i. d. R. false (kein Zähler)
 
         // Dashboard: Monatsanzeige WP-Kosten
         $this->RegisterPropertyInteger('Dash_WP_Cost', 0);
