@@ -175,7 +175,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $varSOC  = $this->ReadPropertyInteger('VarSOC');
 
             $varPrice = $this->ReadPropertyInteger('VarPrice');
-            $priceC   = (bool)$this->ReadPropertyBoolean('PriceIsCounter')
+            $priceC   = (bool)$this->ReadPropertyBoolean('PriceIsCounter');
 
             // Wärmemenge Heizen/WW
             $varHeat = $this->ReadPropertyInteger('VarHeatEnergy');
