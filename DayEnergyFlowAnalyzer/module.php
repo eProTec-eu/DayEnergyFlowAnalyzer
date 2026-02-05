@@ -1919,7 +1919,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
 
     private function GetArchiveControlID(): int
     {
-        $list = IPS_GetInstanceListByModuleID('{43192F0A-135B-4CE7-A0A7-1475603F3060}');
+        $list = IPS_GetInstanceListByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
         if (count($list) === 0) {
             throw new Exception('Keine Archive Control-Instanz gefunden.');
         }
