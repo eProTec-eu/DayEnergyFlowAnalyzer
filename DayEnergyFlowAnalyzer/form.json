@@ -166,7 +166,7 @@
         {
           "type": "Button",
           "caption": "Täglichen Backfill jetzt testen",
-          "onClick": "DEFA_RunDailyBackfillNow($id);"
+          "onClick": "RunDailyBackfillNow($id);"
         },
         {
           "type": "Label",
@@ -197,7 +197,7 @@
           ]
         },
         { "type": "Label", "caption": "Analysefenster automatisch: D–1 00:00 → D+1 00:00" },
-        { "type": "Button", "caption": "Backfill jetzt starten", "onClick": "DEFA_BackfillRange($id);" },
+        { "type": "Button", "caption": "Backfill jetzt starten", "onClick": "BackfillRange($id);" },
         { "type": "Label", "name": "BackfillLog", "caption": "" }
       ]
     }
@@ -207,7 +207,7 @@
     {
       "type": "PopupButton",
       "caption": "Hilfe / README (Popup)",
-      "onClick": "DEFA_ShowHelp($id);",
+      "onClick": "ShowHelp($id);",
       "popup": {
         "caption": "Modulhilfe",
         "closeCaption": "Schließen",
@@ -219,35 +219,35 @@
     {
       "type": "Button",
       "caption": "Hilfe im Browser (HTML)",
-      "onClick": "echo DEFA_OpenHelp($id);",
+      "onClick": "echo OpenHelp($id);",
       "link": true
     },
     {
       "type": "Button",
       "caption": "Dashboard anzeigen",
-      "onClick": "echo DEFA_OpenDashboard($id);",
+      "onClick": "echo OpenDashboard($id);",
       "link": true
     },
     {
       "type": "Button",
       "caption": "Dashboard als PDF exportieren",
-      "onClick": "echo DEFA_ExportDashboardPDF($id);",
+      "onClick": "echo ExportDashboardPDF($id);",
       "link": true
     },
     {
       "type": "Button",
       "caption": "Diagramme generieren",
-      "onClick": "echo DEFA_GenerateDiagrams($id);"
+      "onClick": "echo GenerateDiagrams($id);"
     },
     {
       "type": "Button",
       "caption": "Analyse jetzt",
-      "onClick": "DEFA_Analyze($id);"
+      "onClick": "Analyze($id);"
     },
     {
       "type": "Button",
       "caption": "Details als CSV exportieren",
-      "onClick": "echo DEFA_ExportDetails($id);",
+      "onClick": "echo ExportDetails($id);",
       "link": true
     }
   ]
