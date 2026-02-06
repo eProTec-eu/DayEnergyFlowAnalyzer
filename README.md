@@ -1,154 +1,139 @@
 
 # Day Energy Flow Analyzer (DEFA)
-
-Ein IP‑Symcon Modul zur tagesgenauen Analyse von Energieflüssen zwischen PV, Wärmepumpe (WP), Hauslast, Batterie (SOC) und Netz (Import/Export) – inkl. automatischem **Backfill** von Tageswerten.
-
----
+Ein IP‑Symcon Modul zur tagesgenauen Analyse von Energieflüssen zwischen PV, Wärmepumpe (WP), Hauslast, Batterie (SOC) und Netz (Import/Export) – inkl. Dashboard‑Export (PDF), CSV‑Exports und automatischem Backfill.
 
 ## ✨ Funktionen im Überblick
-- **Analyze()** – Simulation der Energieflüsse im gewählten Zeitfenster; schreibt Tagesergebnisse
-- **ExportDetails()** – CSV‑Export der Intervallwerte
-- **BackfillRange()** – Tages‑Zählerwerte automatisch erstellen
-- **RunDailyBackfillNow() / RunDailyBackfill()** – täglicher automatischer Backfill
-- **ShowHelp() / OpenHelp()** – Anzeige der Modulhilfe (Text und HTML)
+### 🔍 Analyse & Datenverarbeitung
+- **Analyze()** – Simulation der Energieflüsse im gewählten Zeitfenster
+- **ExportDetails()** – CSV‑Export aller Intervallwerte
+- **BackfillRange()** – erzeugt Tages‑Zählerwerte über beliebige Zeiträume
+- **RunDailyBackfill() / RunDailyBackfillNow()** – täglicher Auto‑Backfill
 
----
+### 📊 Dashboard
+- **OpenDashboard()** – HTML/PHP‑Dashboard zur Jahresübersicht
+- **ExportDashboardPDF()**
+  - Erstellt ein PDF im Querformat
+  - Nutzt automatisch das zuletzt im Dashboard gewählte Jahr
+  - Rendert HTML via `wkhtmltopdf`
+
+### 🧹 Temp‑Cleanup
+- Automatischer täglicher Cleanup für `/user/temp/`
+- Manuell triggerbar per:
+  ```php
+  DEFA_RunTempCleanupNow(<InstanceID>);
+  ```
 
 ## 🔧 Voraussetzungen
-- IP‑Symcon mit **Archive Control**
-- Geloggte Variablen für PV, Verbrauch, Wärmepumpe (gesamt oder H+WW), Import
-- Optional: Export & SOC‑Werte
+### IP‑Symcon
+- IP‑Symcon 7.x oder neuer
+- Aktiviertes Archive Control
+- Für die geloggten Archiv‑Variablen sind **1–5 Minuten Intervall** empfohlen  
+  (die Analyse funktioniert aber auch zuverlässig mit größeren Intervallen)
 
----
+
+### Geloggte Variablen
+- PV‑Erzeugung
+- Hauslast
+- WP‑Verbräuche (Heizen/WW oder Gesamt)
+- Import (Pflicht)
+- Optional: Export, SOC, Wärmemengen
+
+## 💾 Voraussetzungen für Dashboard‑Export (PDF)
+### 1. **wkhtmltopdf installiert**
+Beispiel (Debian/Ubuntu):
+```
+sudo apt-get install wkhtmltopdf
+```
+
+### 2. **Zugriff durch den Symcon‑Dienst**
+Test:
+```
+sudo -u <symcon-user> wkhtmltopdf -V
+```
+
+### 3. **Dashboard muss über HTTP verfügbar sein**
+Das PDF rendert via:
+```
+http://127.0.0.1:3777/user/defa_dashboard.php?year=YYYY
+```
+(PHP kann über `file://` nicht ausgeführt werden.)
+
+### 4. **Erforderliche wkhtmltopdf‑Flags**
+- `--orientation Landscape`
+- `--page-size A4`
+- `--encoding utf-8`
+- `--print-media-type`
+- `--disable-smart-shrinking`
+- `--load-error-handling ignore`
+
+### 5. **Dateirechte für /user/temp/**
+Symcon‑Dienst braucht Lese/Schreibrechte:
+```
+sudo chown -R symcon:symcon /var/lib/symcon/user
+sudo chmod -R 775 /var/lib/symcon/user
+```
 
 ## ⚙️ Konfiguration
-### 1) Energiequellen & Flags
-Jede Eingangsvariable wird mit einer IPS‑Variable verknüpft und optional als Zähler (kumulativ) markiert.
+### 1) Energie‑Variablen (PV, Last, WP, Import …)
+### 2) Zeitbereich (relativ/absolut)
+### 3) Batterie‑Parameter (CapKWh, EtaC/D, Charge/DischargeKW)
 
-| Variable | Ident | Beschreibung |
-|---------|-------|--------------|
-| PV‑Erzeugung | VarPV | Gesamt‑PV‑Energieverbrauch (Impuls oder Zähler) |
-| PV ist Zähler | PVIsCounter | True, wenn PV kumulativer Zähler ist |
-| Hauslast | VarLoad | Hausverbrauch ohne WP |
-| Last ist Zähler | LoadIsCounter | True für kumulativen Verbrauchszähler |
-| WP Gesamt | VarHP | Gesamtverbrauch der WP |
-| WP ist Zähler | HPIsCounter | True, falls WP‑Zähler |
-| WP Heizen | VarHPHeat | Nur Heiz‑WP‑Energie |
-| WP Warmwasser | VarHPDHW | Nur WW‑WP‑Energie |
-| Import | VarImport | Netzbezug |
-| Import ist Zähler | ImportIsCounter | True für Zähler |
-| Export (optional) | VarExport | Netzeinspeisung |
-| Export ist Zähler | ExportIsCounter | True für Zähler |
-| SOC (optional) | VarSOC | Ladezustand Batterie in % |
+## 📊 Dashboard – Jahresübersicht
+- Monatswerte für Wärme, WP‑Strom, COP, PV, Haus, Netz, Kosten, Betriebsstunden
+- Steuertasten: **Vorjahr / Folgejahr**
+- Gewähltes Jahr wird gespeichert in
+```
+/user/temp/defa_dashboard_selected_year.txt
+```
+➡️ PDF‑Export verwendet dieses Jahr automatisch.
 
----
+## 📄 PDF‑Export
+- Querformat A4
+- Sehr stabil durch HTTP‑Rendering
+- Fehler landen in:
+  ```
+  /user/temp/wkhtml_err_*.log
+  ```
+- PDFs in:
+  ```
+  /user/temp/dashboard_*.pdf
+  ```
 
-### 2) Zeitbereich
-- **Relativ**: X Tage/Stunden zurück
-- **Absolut**: definierter Zeitraum (Backfill nutzt diesen Modus intern)
-- `StepMinutes`: Breite der Analyse‑Intervalle
+## 🧹 Temp‑Cleanup
+Das Modul erzeugt Dateien im Temp‑Ordner:
+- `dashboard_*.pdf`
+- `defa_export_*.csv`
+- `diagram_*.svg`
+- `defa_help_*.html`
+- `wkhtml_err_*.log`
 
----
+### Automatischer Cleanup
+- Uhrzeit frei konfigurierbar
+- Aufbewahrungsdauer einstellbar
+- Optional: maximale Gesamtgröße, maximale Dateianzahl
 
-### 3) Batterie‑Parameter
-- `CapKWh` – Kapazität in kWh
-- `EtaC` – Lade‑Wirkungsgrad
-- `EtaD` – Entlade‑Wirkungsgrad
-- `ChargeKW` / `DischargeKW` – Leistungsgrenzen
-- `ParamsJSON` – erweiterte Parameter wie `epsilon_import`, `return_details`
+### Manueller Cleanup
+```
+DEFA_RunTempCleanupNow(<InstanceID>);
+```
 
----
-
-## 📊 Ergebnisvariablen (Analyse‑Ausgabe)
-_Nach jeder Analyze() werden diese Variablen automatisch beschrieben:_
-
-| Ident | Inhalt |
-|-------|--------|
-| **TargetDate** | Ziel‑Kalendertag der Analyse |
-| **HP_kWh** | elektrische Tages‑Energie der WP |
-| **PV_to_WP_total_kWh** | PV‑Energie, die der WP zugutekommt |
-| **Import_real_kWh** | realer Netzbezug am Zieltag |
-| **Import_no_wp_kWh** | simuliert ohne WP‑Last |
-| **WP_import_change_signed_kWh** | Nettoeffekt der WP auf den Netzbezug |
-| **ResultJSON** | JSON‑Block aller Tageswerte |
-| **ResultDetailsJSON** | JSON‑Intervalltabelle (optional) |
-
----
-
-## 🧠 Analyse‑Ablauf im Detail
-Der Energietag wird in Intervalle (Buckets) zerlegt. Für jedes Intervall:
-1. PV deckt Hauslast
-2. PV deckt WP
-3. PV‑Rest → Batterie (ηC)
-4. Batterie → Hauslast (ηD)
-5. Batterie → WP (ηD)
-6. Restbedarf → Netzimport
-7. Parallelsimulation ohne WP → Import_no_wp_kWh
-
-Sanity‑Regel: **PV_to_WP_total ≤ HP_kWh**.
-
----
-
-## 📦 Backfill (Tages‑Zähler)
-Backfill erzeugt automatisch Tages‑Summen und schreibt zwei Messpunkte:
-- 00:00 = 0
-- 23:59 = Tageswert
-
-Zielvariablen werden automatisch erzeugt:
-- HP_kWh_Backfilled
-- PV_to_WP_total_kWh_Backfilled
-- Import_real_kWh_Backfilled
-- Import_no_wp_kWh_Backfilled
-- WP_import_change_signed_kWh_Backfilled
-
----
-
-## ▶️ Bedienfunktionen
+## 📘 Bedienfunktionen
 - Analyze()
-- BackfillRange()
-- RunDailyBackfillNow()
 - ExportDetails()
-- OpenHelp() / ShowHelp()
-
----
+- BackfillRange()
+- RunDailyBackfill()
+- OpenDashboard()
+- ExportDashboardPDF()
+- RunTempCleanupNow()
 
 ## 💡 Tipps
-- Logger‑Auflösung 1–5 Minuten ist optimal
-- SOC möglichst regelmäßig loggen
-- Backfill nutzt immer 48h‑Fenster für präzise Tagesmitte
-
----
+- Logger‑Intervall 1–5 Minuten ideal
+- SOC regelmäßig loggen
+- Für PDF das Dashboard vorher öffnen & Jahr wählen
 
 ## 💙 Unterstützung
+Wenn dir das Modul gefällt:
+**https://www.paypal.com/pool/9mms4CEXrr?sr=wccr**
 
-Wenn dir das IP‑Symcon Modul gefällt oder du die Weiterentwicklung unterstützen möchtest, freue ich mich über eine Spende:
-
-[💙 Jetzt per PayPal spenden](https://www.paypal.com/pool/9mms4CEXrr?sr=wccr)
-
----
-
-# 📄 Lizenz (MIT License)
-
-```
-MIT License
-
+## 📄 Lizenz (MIT)
 Copyright (c) 2026 Matthias Fenske
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
