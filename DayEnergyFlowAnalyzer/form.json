@@ -208,6 +208,19 @@
         { "type": "Button", "caption": "Backfill jetzt starten", "onClick": "DEFA_BackfillRange($id);" },
         { "type": "Label", "name": "BackfillLog", "caption": "" }
       ]
+    },
+
+    {
+      "type": "ExpansionPanel",
+      "caption": "Temp-Verzeichnis aufräumen",
+      "items": [
+        { "type": "CheckBox", "name": "TempCleanupEnabled", "caption": "Automatisches Aufräumen aktivieren" },
+        { "type": "ValidationTextBox", "name": "TempCleanupStartTime", "caption": "Startzeit (HH:MM)" },
+        { "type": "NumberSpinner", "name": "TempKeepDays", "caption": "Aufbewahrung (Tage)", "minimum": 0, "maximum": 365 },
+        { "type": "NumberSpinner", "name": "TempMaxTotalMB", "caption": "Max. Gesamtgröße (MB, 0=kein Limit)", "minimum": 0, "maximum": 1048576 },
+        { "type": "NumberSpinner", "name": "TempMaxFiles", "caption": "Max. Anzahl Dateien (0=kein Limit)", "minimum": 0, "maximum": 100000 },
+        { "type": "Button", "caption": "Jetzt aufräumen", "onClick": "DEFA_RunTempCleanupNow($id);" }
+      ]
     }
   ],
 
