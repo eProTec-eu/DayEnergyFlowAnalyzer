@@ -402,7 +402,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->SendDebug('TempCleanup', "Manuell gelöscht: {$deleted} Datei(en).", 0);
     }
 
-    public function RunTempCleanup(int $InstanceID): void
+    public function RunTempCleanup(int $ID): void
     {
         // Nächsten Lauf gleich neu planen (wie beim DailyBackfill)
         $tcTimeStr = $this->ReadPropertyString('TempCleanupStartTime') ?: '03:10';
