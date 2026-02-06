@@ -117,6 +117,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterPropertyInteger('Dash_GridBuy', 0);
         $this->RegisterPropertyInteger('Dash_HeaterHours', 0);
         $this->RegisterPropertyInteger('Dash_DHWHours', 0);
+        $this->RegisterPropertyInteger('Dash_Year', 0);
 
         // Dashboard: Monatsanzeige WP-Kosten
         $this->RegisterPropertyInteger('Dash_WP_Cost', 0);
@@ -585,7 +586,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
             }
 
             // 4) Quelle: HTTP (PHP wird hier korrekt ausgeführt)
-            $url = "http://{$host}:3777/user/defa_dashboard.php";
+            //$url = "http://{$host}:3777/user/defa_dashboard.php";
+            $selectedYear = (int)$this->ReadPropertyInteger("Dash_Year");
+            if ($selctedYear == 0)
+                selectedYear = (int)date('Y');
+            $url = "http://{$host}:3777/user/defa_dashboard.php?year={$selectedYear}";
 
             // 5) Command:
             // stderr → Datei, NICHT an Symcon zurückleiten!
