@@ -588,7 +588,7 @@ class DayEnergyFlowAnalyzer extends IPSModule
             // 4) Quelle: HTTP (PHP wird hier korrekt ausgeführt)
             //$url = "http://{$host}:3777/user/defa_dashboard.php";
             $selectedYear = (int)$this->ReadPropertyInteger("Dash_Year");
-            if ($selctedYear == 0)
+            if ($selectedYear == 0)
                 $selectedYear = (int)date('Y');
             $url = "http://{$host}:3777/user/defa_dashboard.php?year={$selectedYear}";
 
