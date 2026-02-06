@@ -270,6 +270,11 @@
       "caption": "Details als CSV exportieren",
       "onClick": "echo DEFA_ExportDetails($id);",
       "link": true
+    },
+    {
+      "type": "Button",
+      "caption": "Temp-Verzeichnis jetzt aufräumen",
+      "onClick": "DEFA_RunTempCleanupNow($id);"
     }
   ]
 }
