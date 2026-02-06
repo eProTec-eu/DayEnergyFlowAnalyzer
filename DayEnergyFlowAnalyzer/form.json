@@ -146,7 +146,7 @@
         { "type": "SelectVariable", "caption": "Betriebsstunden Heizen",      "name": "Dash_HeaterHours" },
         { "type": "SelectVariable", "caption": "Betriebsstunden Warmwasser",  "name": "Dash_DHWHours" },
 
-        { "type": "SelectVariable", "name": "Default Jahr für Dashboard", "caption": "Dash_Year" },
+        { "type": "SelectVariable", "name": "Default Jahr für Dashboard", "caption": "Dash_Year" }
       ]
     },
 
