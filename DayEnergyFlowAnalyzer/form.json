@@ -146,7 +146,15 @@
         { "type": "SelectVariable", "caption": "Betriebsstunden Heizen",      "name": "Dash_HeaterHours" },
         { "type": "SelectVariable", "caption": "Betriebsstunden Warmwasser",  "name": "Dash_DHWHours" },
 
-        { "type": "SelectVariable", "name": "Default Jahr für Dashboard", "caption": "Dash_Year" }
+        {
+        "type": "NumberSpinner",
+        "name": "Dash_Year",
+        "caption": "Default Jahr",
+        "minimum": 2000,
+        "maximum": 2100
+        }
+        ]
+      }
       ]
     },
 
