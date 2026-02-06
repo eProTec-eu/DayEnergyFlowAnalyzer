@@ -127,6 +127,16 @@ class DayEnergyFlowAnalyzer extends IPSModule
         $this->RegisterVariableFloat('HP_Cost_NoWP_EUR', 'WP-Kosten ohne WP [€]');
         $this->RegisterVariableFloat('HP_Cost_Change_EUR', 'Netto-Kostenänderung [€]');
 
+        // --- Cleanup-Konfiguration (Temp-Verzeichnis) ---
+        $this->RegisterPropertyBoolean('TempCleanupEnabled', true);
+        $this->RegisterPropertyString('TempCleanupStartTime', '03:10'); // HH:MM, wie beim DailyBackfill
+        $this->RegisterPropertyInteger('TempKeepDays', 14);             // Aufbewahrung in Tagen
+        // Optional: Max-Gesamtgröße (MB) & Max-Dateien (0 = ignorieren)
+        $this->RegisterPropertyInteger('TempMaxTotalMB', 0);
+        $this->RegisterPropertyInteger('TempMaxFiles', 0);
+
+        // Timer für täglichen Cleanup
+        $this->RegisterTimer('DEFA_TempCleanupTimer', 0, 'DEFA_RunTempCleanup($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges()
@@ -142,6 +152,15 @@ class DayEnergyFlowAnalyzer extends IPSModule
         } else {
             $this->SetTimerInterval('DEFA_DailyBackfillTimer', 0);
         }
+
+        // --- Temp-Cleanup Timer setzen ---
+        $tcEnabled = $this->ReadPropertyBoolean('TempCleanupEnabled');
+        $tcTimeStr = $this->ReadPropertyString('TempCleanupStartTime') ?: '03:10';
+        $tcNext = $this->calcNextRun($tcTimeStr);
+        $this->SetTimerInterval(
+            'DEFA_TempCleanupTimer',
+            ($tcEnabled && $tcNext > 0) ? max(0, ($tcNext - time()) * 1000) : 0
+        );        
     }
 
     public function Analyze()
@@ -375,6 +394,23 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $this->SendDebug('Analyze/Error', $e->getMessage(), 0);
             throw $e;
         }
+    }
+
+    public function RunTempCleanupNow(): void
+    {
+        $deleted = $this->cleanupTempDir();
+        $this->SendDebug('TempCleanup', "Manuell gelöscht: {$deleted} Datei(en).", 0);
+    }
+
+    public function RunTempCleanup(int $InstanceID): void
+    {
+        // Nächsten Lauf gleich neu planen (wie beim DailyBackfill)
+        $tcTimeStr = $this->ReadPropertyString('TempCleanupStartTime') ?: '03:10';
+        $tcNext = $this->calcNextRun($tcTimeStr);
+        $this->SetTimerInterval('DEFA_TempCleanupTimer', max(0, ($tcNext - time()) * 1000));
+
+        $deleted = $this->cleanupTempDir();
+        $this->SendDebug('TempCleanup', "Täglicher Cleanup: {$deleted} Datei(en) gelöscht.", 0);
     }
 
     public function ExportDetails()
@@ -993,6 +1029,89 @@ class DayEnergyFlowAnalyzer extends IPSModule
         }, $files);
 
         echo json_encode($urls);
+    }
+
+    private function cleanupTempDir(): int
+    {
+        $kernelDir = IPS_GetKernelDir();
+        $baseDir   = $kernelDir . 'user/';
+        $tempDir   = $baseDir . 'temp/';
+        if (!is_dir($tempDir)) { return 0; }
+
+        $keepDays      = max(0, (int)$this->ReadPropertyInteger('TempKeepDays'));
+        $maxAgeTs      = time() - ($keepDays * 86400);
+        $maxTotalMB    = max(0, (int)$this->ReadPropertyInteger('TempMaxTotalMB'));
+        $maxFilesCount = max(0, (int)$this->ReadPropertyInteger('TempMaxFiles'));
+
+        // Nur Dateien, die vom Modul erzeugt werden:
+        $patterns = [
+            'defa_export_*.csv',
+            'defa_help_*.html',
+            'dashboard_*.pdf',
+            'wkhtml_err_*.log',
+            'diagram_*.svg'
+        ];
+
+        // Alle Kandidaten sammeln
+        $files = [];
+        foreach ($patterns as $pat) {
+            foreach (glob($tempDir . $pat) as $f) {
+                if (is_file($f)) { $files[] = $f; }
+            }
+        }
+
+        if (empty($files)) { return 0; }
+
+        // 1) Zuerst: nach Alter löschen (älter als keepDays)
+        $deleted = 0;
+        $survivors = [];
+        foreach ($files as $f) {
+            $mtime = @filemtime($f) ?: 0;
+            if ($keepDays > 0 && $mtime > 0 && $mtime < $maxAgeTs) {
+                if (@unlink($f)) { $deleted++; }
+            } else {
+                $survivors[] = $f;
+            }
+        }
+
+        // 2) Optional: Gesamtgröße deckeln (älteste zuerst löschen)
+        if ($maxTotalMB > 0) {
+            $limitBytes = (int)$maxTotalMB * 1024 * 1024;
+            // Liste mit Größe & mtime aufbauen
+            $list = [];
+            $total = 0;
+            foreach ($survivors as $f) {
+                $size  = @filesize($f) ?: 0;
+                $mtime = @filemtime($f) ?: 0;
+                $list[] = ['f'=>$f, 'size'=>$size, 'mtime'=>$mtime];
+                $total += $size;
+            }
+            if ($total > $limitBytes) {
+                // Älteste zuerst entfernen bis Limit passt
+                usort($list, fn($a,$b) => $a['mtime'] <=> $b['mtime']);
+                foreach ($list as $item) {
+                    if ($total <= $limitBytes) break;
+                    if (@unlink($item['f'])) {
+                        $deleted++;
+                        $total -= $item['size'];
+                    }
+                }
+                // Survivors aktualisieren
+                $survivors = array_values(array_map(fn($x)=>$x['f'], array_filter($list, fn($x)=>file_exists($x['f']))));
+            }
+        }
+
+        // 3) Optional: Max-Dateien deckeln (älteste zuerst löschen)
+        if ($maxFilesCount > 0 && count($survivors) > $maxFilesCount) {
+            // nach Alter aufsteigend
+            usort($survivors, fn($a,$b) => (@filemtime($a) ?: 0) <=> (@filemtime($b) ?: 0));
+            $toDrop = count($survivors) - $maxFilesCount;
+            for ($i = 0; $i < $toDrop; $i++) {
+                if (@unlink($survivors[$i])) { $deleted++; }
+            }
+        }
+
+        return $deleted;
     }
 
     private function readStateWithInitial(int $acID, int $varID, \DateTimeImmutable $from, \DateTimeImmutable $to): array
