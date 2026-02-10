@@ -615,7 +615,11 @@ class DayEnergyFlowAnalyzer extends IPSModule
             $pdfFile = $tempDir . "dashboard_" . time() . ".pdf";
 
             // 3) wkhtmltopdf finden
-            $wkhtml = trim(@shell_exec("which wkhtmltopdf 2>/dev/null"));
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                $wkhtml = trim(shell_exec("where wkhtmltopdf.exe"));
+            } else {
+                $wkhtml = trim(shell_exec("which wkhtmltopdf 2>/dev/null"));
+            }
             if ($wkhtml === "") {
                 echo "about:blank";
                 return;
